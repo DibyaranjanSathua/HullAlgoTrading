@@ -1,0 +1,18 @@
+{
+  "script": "NIFTY",
+  "quantity_per_lot": 50,
+  "ce_premium_check": {
+    "premium": 10000
+  },
+  "missing_data": [
+    {
+      "strike": 17400,
+      "start_datetime": "2022-02-03 09:15:00",
+      "end_datetime": "2022-02-03 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    }
+  ],
+  "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/input.xlsx",
+  "output_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/output.xlsx",
+  "db_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/database.sqlite"
+}
