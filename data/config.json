@@ -2,7 +2,12 @@
   "script": "NIFTY",
   "quantity_per_lot": 50,
   "ce_premium_check": {
-    "premium": 10000
+    "premium": 10000,
+    "__comment": "Premium is per lot. So in code I am multiplying it by lot_size."
+  },
+  "SL_check": {
+    "PE": 20,
+    "CE": 20
   },
   "missing_data": [
     {

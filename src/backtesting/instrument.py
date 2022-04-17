@@ -13,6 +13,7 @@ class Instrument:
     symbol: str
     lot_size: Optional[int]
     expiry: Optional[datetime.date]
+    entry: Optional[datetime.datetime]
     option_type: Optional[str]
     strike: Optional[int]
     price: float

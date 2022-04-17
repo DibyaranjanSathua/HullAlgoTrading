@@ -3,7 +3,7 @@ File:           hull_ma_strategy.py
 Author:         Dibyaranjan Sathua
 Created on:     16/04/22, 12:06 pm
 """
-from typing import List
+from typing import List, Tuple
 import datetime
 from pathlib import Path
 import pandas as pd
@@ -21,7 +21,7 @@ class HullMABackTesting(BaseBackTesting):
     """ Hull moving average backtesting """
     OUTPUT_EXCEL_COLUMNS = [
         "Trade", "Script", "Strike", "Expiry", "EntryExitTime", "LotSize", "PESell", "PEProfitLoss"
-        "CEBuy", "CEProfitLoss", "ExitType"
+        "PEExitType", "CEBuy", "CEProfitLoss", "CEExitType"
     ]
 
     def __init__(self, config_file_path: str):
@@ -118,6 +118,7 @@ class HullMABackTesting(BaseBackTesting):
         return Instrument(
             symbol=symbol,
             lot_size=int(lot_size),
+            entry=entry_datetime,
             expiry=expiry,
             option_type="CE",
             strike=entry_strike,
@@ -151,6 +152,7 @@ class HullMABackTesting(BaseBackTesting):
         return Instrument(
             symbol=symbol,
             lot_size=int(lot_size),
+            entry=entry_datetime,
             expiry=expiry,
             option_type="PE",
             strike=entry_strike,
@@ -167,12 +169,64 @@ class HullMABackTesting(BaseBackTesting):
         """
         premium_check = self.config.get("ce_premium_check")
         if premium_check is not None:
-            # lot_size in config is the quantity per lot
+            # Premium in config file is per lot. So multiply it by lot_size
             ce_instrument_premium = ce_instrument.price * ce_instrument.lot_size * \
                                     self.config["quantity_per_lot"]
-            if ce_instrument_premium > premium_check["premium"]:
+            if ce_instrument_premium > premium_check["premium"] * ce_instrument.lot_size:
                 return False
         return True
+
+    def get_historical_price_range_data(
+            self,
+            start_datetime: datetime.datetime,
+            end_datetime: datetime.datetime,
+            option_type: str
+    ) -> List[sqlite3.Row]:
+        """
+        Returns price range minute by minute data between start datetime and end datetime.
+        This is use for checking SL hit. Start datetime is entry datetime and end datetime is
+        actual exit datetime.
+        """
+        if option_type == "CE":
+            historical_data = self._ce_historical_data
+        else:
+            historical_data = self._pe_historical_data
+
+        return [
+            x
+            for x in historical_data
+            if start_datetime < datetime.datetime.strptime(x["dt"], "%Y-%m-%d %H:%M:%S.%f") <
+               end_datetime
+        ]
+
+    def instrument_stop_loss_hit(
+            self, instrument: Instrument, stop_loss: float, exit_datetime: datetime.datetime
+    ) -> Tuple[bool, float]:
+        """
+        Check if SL hit for an instrument.
+        Return a tuple with first element a boolean indicate if SL hit or not. Second element is
+        the price at which the SL hit.
+        stop_loss is in percentage like 20%, 25%.
+        """
+        price_data = self.get_historical_price_range_data(
+            start_datetime=instrument.entry,
+            end_datetime=exit_datetime,
+            option_type=instrument.option_type
+        )
+        if instrument.option_type == "CE":
+            # Its a long trade. So Stop Loss will be below the long price
+            instrument_sl_price = round((100 - stop_loss) * instrument.price / 100, 2)
+        else:
+            # Its a short trade. So Stop Loss will be above the short price
+            instrument_sl_price = round((100 + stop_loss) * instrument.price / 100, 2)
+        for data in price_data:
+            # Long trade. If price goes below instrument_sl_price, SL hit
+            if instrument.option_type == "CE" and float(data["close"]) < instrument_sl_price:
+                return True, float(data["close"])
+            # Short trade. If price goes above instrument_sl_price, SL hit
+            elif instrument.option_type == "PE" and float(data["close"]) > instrument_sl_price:
+                return True, float(data["close"])
+        return False, 0
 
     def entry(self, entry_row) -> None:
         """ Logic for trade entry """
@@ -214,10 +268,10 @@ class HullMABackTesting(BaseBackTesting):
             "LotSize": self.PE_ENTRY_INSTRUMENT.lot_size,
             "PESell": self.PE_ENTRY_INSTRUMENT.price,
             "PEProfitLoss": 0,
+            "PEExitType": "",
             "CEBuy": ce_instrument_price,
             "CEProfitLoss": 0,
-            "ExitType": "CE not traded due to premium check"
-            if self.CE_ENTRY_INSTRUMENT is None else ""
+            "CEExitType": ""
         }
         df = pd.DataFrame([list(df_data.values())], columns=list(df_data.keys()))
         self._output_df = pd.concat([self._output_df, df], axis=0)
@@ -226,59 +280,95 @@ class HullMABackTesting(BaseBackTesting):
         """ Logic for trade exit """
         exit_datetime = self.get_market_hour_datetime(exit_row["Date/Time"])
         lot_size = int(exit_row["Contracts"])
+        quantity_per_lot = self.config["quantity_per_lot"]
         expiry = self.PE_ENTRY_INSTRUMENT.expiry
         if exit_datetime.date() > expiry:
-            exit_type = ExitType.EXPIRY_EXIT
+            ce_exit_type = pe_exit_type = ExitType.EXPIRY_EXIT
             actual_exit_datetime = datetime.datetime.combine(
                 expiry, datetime.time(hour=15, minute=29)
             )
         else:
-            exit_type = ExitType.EXIT_SIGNAL
+            ce_exit_type = pe_exit_type = ExitType.EXIT_SIGNAL
             actual_exit_datetime = exit_datetime
 
-        # Decrease the lot size from the entry instrument
-        self.PE_ENTRY_INSTRUMENT.lot_size -= lot_size
+        # Variables to track if the instrument is exited
+        ce_instrument_exited = False
+        pe_instrument_exited = False
+        sl_check = self.config.get("SL_check")      # Get SL_check from config file
         # Get CE exit price
         ce_exit_price = 0
         ce_profit_loss = 0
         if self.CE_ENTRY_INSTRUMENT is not None:
+            # Check if SL exit mode is set in config file. If yes, check minute by minute data
+            # to see if SL is getting hit
+            if sl_check is not None:
+                ce_instrument_exited, ce_exit_price = self.instrument_stop_loss_hit(
+                    instrument=self.CE_ENTRY_INSTRUMENT,
+                    stop_loss=sl_check["CE"],
+                    exit_datetime=actual_exit_datetime
+                )
+            if ce_instrument_exited:
+                # This is True when SL check is ON and CE SL hits
+                ce_exit_type = ExitType.SL_EXIT
+            else:
+                # For this part the exit type is already calculated in top based on expiry date
+                try:
+                    ce_exit_price = self.get_historical_price_by_datetime(
+                        option_type="CE", dt=actual_exit_datetime
+                    )
+                except BackTestingError:
+                    # Checking if data actually exist in database
+                    if self.is_data_missing(self.CE_ENTRY_INSTRUMENT.strike, actual_exit_datetime):
+                        msg = f"Data is missing for {self.CE_ENTRY_INSTRUMENT.symbol} at " \
+                              f"{actual_exit_datetime} for expiry {expiry}"
+                        self._logger.error(msg)
+                        ce_exit_price = 0
+                    else:
+                        msg = f"No price data found for {self.CE_ENTRY_INSTRUMENT.symbol} at " \
+                              f"{actual_exit_datetime} for expiry {expiry}"
+                        self._logger.error(msg)
+                        raise BackTestingError(msg)
+            ce_profit_loss = (ce_exit_price - self.CE_ENTRY_INSTRUMENT.price) * lot_size * \
+                             quantity_per_lot
+            self.CE_ENTRY_INSTRUMENT.lot_size -= lot_size
+        else:
+            ce_exit_type = ExitType.CE_PREMIUM_EXIT
+
+        # Get PE exit price
+        # Check if SL exit mode is set in config file. If yes, check minute by minute data
+        # to see if SL is getting hit
+        pe_exit_price = 0
+        if sl_check is not None:
+            pe_instrument_exited, pe_exit_price = self.instrument_stop_loss_hit(
+                instrument=self.PE_ENTRY_INSTRUMENT,
+                stop_loss=sl_check["PE"],
+                exit_datetime=actual_exit_datetime
+            )
+        if pe_instrument_exited:
+            # This is True when SL check is ON and CE SL hits
+            pe_exit_type = ExitType.SL_EXIT
+        else:
             try:
-                ce_exit_price = self.get_historical_price_by_datetime(
-                    option_type="CE", dt=actual_exit_datetime
+                pe_exit_price = self.get_historical_price_by_datetime(
+                    option_type="PE", dt=actual_exit_datetime
                 )
             except BackTestingError:
                 # Checking if data actually exist in database
-                if self.is_data_missing(self.CE_ENTRY_INSTRUMENT.strike, actual_exit_datetime):
-                    msg = f"Data is missing for {self.CE_ENTRY_INSTRUMENT.symbol} at " \
+                if self.is_data_missing(self.PE_ENTRY_INSTRUMENT.strike, actual_exit_datetime):
+                    msg = f"Data is missing for {self.PE_ENTRY_INSTRUMENT.symbol} at " \
                           f"{actual_exit_datetime} for expiry {expiry}"
                     self._logger.error(msg)
-                    ce_exit_price = 0
+                    pe_exit_price = 0
                 else:
-                    msg = f"No price data found for {self.CE_ENTRY_INSTRUMENT.symbol} at " \
+                    msg = f"No price data found for {self.PE_ENTRY_INSTRUMENT.symbol} at " \
                           f"{actual_exit_datetime} for expiry {expiry}"
                     self._logger.error(msg)
                     raise BackTestingError(msg)
-            ce_profit_loss = (ce_exit_price - self.CE_ENTRY_INSTRUMENT.price) * lot_size
-            self.CE_ENTRY_INSTRUMENT.lot_size -= lot_size
 
-        # Get PE exit price
-        try:
-            pe_exit_price = self.get_historical_price_by_datetime(
-                option_type="PE", dt=actual_exit_datetime
-            )
-        except BackTestingError:
-            # Checking if data actually exist in database
-            if self.is_data_missing(self.PE_ENTRY_INSTRUMENT.strike, actual_exit_datetime):
-                msg = f"Data is missing for {self.PE_ENTRY_INSTRUMENT.symbol} at " \
-                      f"{actual_exit_datetime} for expiry {expiry}"
-                self._logger.error(msg)
-                pe_exit_price = 0
-            else:
-                msg = f"No price data found for {self.PE_ENTRY_INSTRUMENT.symbol} at " \
-                      f"{actual_exit_datetime} for expiry {expiry}"
-                self._logger.error(msg)
-                raise BackTestingError(msg)
-
+        pe_profit_loss = (self.PE_ENTRY_INSTRUMENT.price - pe_exit_price) * lot_size * \
+                         quantity_per_lot
+        # Decrease the lot size from the entry instrument
+        self.PE_ENTRY_INSTRUMENT.lot_size -= lot_size
         # Add to output dataframe
         df_data = {
             "Trade": self._trade_count,
@@ -288,10 +378,11 @@ class HullMABackTesting(BaseBackTesting):
             "EntryExitTime": actual_exit_datetime,
             "LotSize": self.PE_ENTRY_INSTRUMENT.lot_size,
             "PESell": pe_exit_price,
-            "PEProfitLoss": (self.PE_ENTRY_INSTRUMENT.price - pe_exit_price) * lot_size,
+            "PEProfitLoss": pe_profit_loss,
+            "PEExitType": pe_exit_type,
             "CEBuy": ce_exit_price,
             "CEProfitLoss": ce_profit_loss,
-            "ExitType": exit_type
+            "CEExitType": ce_exit_type
         }
         df = pd.DataFrame([list(df_data.values())], columns=list(df_data.keys()))
         self._output_df = pd.concat([self._output_df, df], axis=0)

@@ -11,7 +11,8 @@ class SignalType:
 
 
 class ExitType:
-    SL_HIT: str = "SL Hit"
+    SL_EXIT: str = "SL Exit"
     EXIT_SIGNAL: str = "Exit Signal"
     EXPIRY_EXIT: str = "Expiry Exit"
     MISSING_DATA: str = "Missing Data"
+    CE_PREMIUM_EXIT: str = "CE not traded due to premium check"
