@@ -3,7 +3,7 @@ File:           hull_ma_strategy.py
 Author:         Dibyaranjan Sathua
 Created on:     16/04/22, 12:06 pm
 """
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import datetime
 from pathlib import Path
 import pandas as pd
@@ -20,8 +20,8 @@ from src.utils.logger import LogFacade
 class HullMABackTesting(BaseBackTesting):
     """ Hull moving average backtesting """
     OUTPUT_EXCEL_COLUMNS = [
-        "Trade", "Script", "Strike", "Expiry", "EntryExitTime", "LotSize", "PESell", "PEProfitLoss"
-        "PEExitType", "CEBuy", "CEProfitLoss", "CEExitType"
+        "Trade", "Script", "Strike", "Expiry", "LotSize", "PEEntryExitTime", "PESell",
+        "PEProfitLoss", "PEExitType", "CEEntryExitTime", "CEBuy", "CEProfitLoss", "CEExitType"
     ]
 
     def __init__(self, config_file_path: str):
@@ -201,11 +201,11 @@ class HullMABackTesting(BaseBackTesting):
 
     def instrument_stop_loss_hit(
             self, instrument: Instrument, stop_loss: float, exit_datetime: datetime.datetime
-    ) -> Tuple[bool, float]:
+    ) -> Tuple[bool, Optional[float], Optional[datetime.datetime]]:
         """
         Check if SL hit for an instrument.
         Return a tuple with first element a boolean indicate if SL hit or not. Second element is
-        the price at which the SL hit.
+        the price at which the SL hit. Third element is the time SL hit.
         stop_loss is in percentage like 20%, 25%.
         """
         price_data = self.get_historical_price_range_data(
@@ -222,11 +222,13 @@ class HullMABackTesting(BaseBackTesting):
         for data in price_data:
             # Long trade. If price goes below instrument_sl_price, SL hit
             if instrument.option_type == "CE" and float(data["close"]) < instrument_sl_price:
-                return True, float(data["close"])
+                return True, float(data["close"]), \
+                       datetime.datetime.strptime(data["dt"], "%Y-%m-%d %H:%M:%S.%f")
             # Short trade. If price goes above instrument_sl_price, SL hit
             elif instrument.option_type == "PE" and float(data["close"]) > instrument_sl_price:
-                return True, float(data["close"])
-        return False, 0
+                return True, float(data["close"]), \
+                       datetime.datetime.strptime(data["dt"], "%Y-%m-%d %H:%M:%S.%f")
+        return False, None, None
 
     def entry(self, entry_row) -> None:
         """ Logic for trade entry """
@@ -264,11 +266,12 @@ class HullMABackTesting(BaseBackTesting):
             "Script": self.config["script"],
             "Strike": entry_strike,
             "Expiry": expiry,
-            "EntryExitTime": entry_datetime,
             "LotSize": self.PE_ENTRY_INSTRUMENT.lot_size,
+            "PEEntryExitTime": entry_datetime,
             "PESell": self.PE_ENTRY_INSTRUMENT.price,
             "PEProfitLoss": 0,
             "PEExitType": "",
+            "CEEntryExitTime": entry_datetime,
             "CEBuy": ce_instrument_price,
             "CEProfitLoss": 0,
             "CEExitType": ""
@@ -284,12 +287,12 @@ class HullMABackTesting(BaseBackTesting):
         expiry = self.PE_ENTRY_INSTRUMENT.expiry
         if exit_datetime.date() > expiry:
             ce_exit_type = pe_exit_type = ExitType.EXPIRY_EXIT
-            actual_exit_datetime = datetime.datetime.combine(
+            ce_actual_exit_datetime = pe_actual_exit_datetime = datetime.datetime.combine(
                 expiry, datetime.time(hour=15, minute=29)
             )
         else:
             ce_exit_type = pe_exit_type = ExitType.EXIT_SIGNAL
-            actual_exit_datetime = exit_datetime
+            ce_actual_exit_datetime = pe_actual_exit_datetime = exit_datetime
 
         # Variables to track if the instrument is exited
         ce_instrument_exited = False
@@ -302,30 +305,31 @@ class HullMABackTesting(BaseBackTesting):
             # Check if SL exit mode is set in config file. If yes, check minute by minute data
             # to see if SL is getting hit
             if sl_check is not None:
-                ce_instrument_exited, ce_exit_price = self.instrument_stop_loss_hit(
+                ce_instrument_exited, ce_exit_price, sl_datetime = self.instrument_stop_loss_hit(
                     instrument=self.CE_ENTRY_INSTRUMENT,
                     stop_loss=sl_check["CE"],
-                    exit_datetime=actual_exit_datetime
+                    exit_datetime=ce_actual_exit_datetime
                 )
             if ce_instrument_exited:
                 # This is True when SL check is ON and CE SL hits
+                ce_actual_exit_datetime = sl_datetime
                 ce_exit_type = ExitType.SL_EXIT
             else:
                 # For this part the exit type is already calculated in top based on expiry date
                 try:
                     ce_exit_price = self.get_historical_price_by_datetime(
-                        option_type="CE", dt=actual_exit_datetime
+                        option_type="CE", dt=ce_actual_exit_datetime
                     )
                 except BackTestingError:
                     # Checking if data actually exist in database
-                    if self.is_data_missing(self.CE_ENTRY_INSTRUMENT.strike, actual_exit_datetime):
+                    if self.is_data_missing(self.CE_ENTRY_INSTRUMENT.strike, ce_actual_exit_datetime):
                         msg = f"Data is missing for {self.CE_ENTRY_INSTRUMENT.symbol} at " \
-                              f"{actual_exit_datetime} for expiry {expiry}"
+                              f"{ce_actual_exit_datetime} for expiry {expiry}"
                         self._logger.error(msg)
                         ce_exit_price = 0
                     else:
                         msg = f"No price data found for {self.CE_ENTRY_INSTRUMENT.symbol} at " \
-                              f"{actual_exit_datetime} for expiry {expiry}"
+                              f"{ce_actual_exit_datetime} for expiry {expiry}"
                         self._logger.error(msg)
                         raise BackTestingError(msg)
             ce_profit_loss = (ce_exit_price - self.CE_ENTRY_INSTRUMENT.price) * lot_size * \
@@ -339,29 +343,30 @@ class HullMABackTesting(BaseBackTesting):
         # to see if SL is getting hit
         pe_exit_price = 0
         if sl_check is not None:
-            pe_instrument_exited, pe_exit_price = self.instrument_stop_loss_hit(
+            pe_instrument_exited, pe_exit_price, sl_datetime = self.instrument_stop_loss_hit(
                 instrument=self.PE_ENTRY_INSTRUMENT,
                 stop_loss=sl_check["PE"],
-                exit_datetime=actual_exit_datetime
+                exit_datetime=pe_actual_exit_datetime
             )
         if pe_instrument_exited:
             # This is True when SL check is ON and CE SL hits
+            pe_actual_exit_datetime = sl_datetime
             pe_exit_type = ExitType.SL_EXIT
         else:
             try:
                 pe_exit_price = self.get_historical_price_by_datetime(
-                    option_type="PE", dt=actual_exit_datetime
+                    option_type="PE", dt=pe_actual_exit_datetime
                 )
             except BackTestingError:
                 # Checking if data actually exist in database
-                if self.is_data_missing(self.PE_ENTRY_INSTRUMENT.strike, actual_exit_datetime):
+                if self.is_data_missing(self.PE_ENTRY_INSTRUMENT.strike, pe_actual_exit_datetime):
                     msg = f"Data is missing for {self.PE_ENTRY_INSTRUMENT.symbol} at " \
-                          f"{actual_exit_datetime} for expiry {expiry}"
+                          f"{pe_actual_exit_datetime} for expiry {expiry}"
                     self._logger.error(msg)
                     pe_exit_price = 0
                 else:
                     msg = f"No price data found for {self.PE_ENTRY_INSTRUMENT.symbol} at " \
-                          f"{actual_exit_datetime} for expiry {expiry}"
+                          f"{pe_actual_exit_datetime} for expiry {expiry}"
                     self._logger.error(msg)
                     raise BackTestingError(msg)
 
@@ -375,11 +380,12 @@ class HullMABackTesting(BaseBackTesting):
             "Script": self.config["script"],
             "Strike": self.PE_ENTRY_INSTRUMENT.strike,
             "Expiry": expiry,
-            "EntryExitTime": actual_exit_datetime,
             "LotSize": self.PE_ENTRY_INSTRUMENT.lot_size,
+            "PEEntryExitTime": pe_actual_exit_datetime,
             "PESell": pe_exit_price,
             "PEProfitLoss": pe_profit_loss,
             "PEExitType": pe_exit_type,
+            "CEEntryExitTime": ce_actual_exit_datetime,
             "CEBuy": ce_exit_price,
             "CEProfitLoss": ce_profit_loss,
             "CEExitType": ce_exit_type
