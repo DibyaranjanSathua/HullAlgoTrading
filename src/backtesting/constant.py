@@ -16,3 +16,6 @@ class ExitType:
     EXPIRY_EXIT: str = "Expiry Exit"
     MISSING_DATA: str = "Missing Data"
     CE_PREMIUM_EXIT: str = "CE not traded due to premium check"
+    NO_TRADE: str = "No Trade"
+    SOFT_EXIT: str = "SOft Exit"
+    INVALID_EXIT: str = "Invalid Exit"

@@ -126,5 +126,5 @@ if __name__ == "__main__":
         )
 
     with DBApi(Path(db_file)) as db_api:
-        holiday = db_api.is_holiday(dt=datetime.date(day=3, month=2, year=2022))
+        holiday = db_api.is_holiday(dt=datetime.date(day=12, month=1, year=2022))
         print(holiday)
