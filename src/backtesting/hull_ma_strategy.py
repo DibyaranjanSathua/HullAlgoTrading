@@ -5,12 +5,13 @@ Created on:     16/04/22, 12:06 pm
 """
 from typing import List, Tuple, Optional
 import datetime
+import time
 from pathlib import Path
 import pandas as pd
 import sqlite3
 
 from src.backtesting.base_backtesting import BaseBackTesting
-from src.backtesting.constant import SignalType, ExitType
+from src.backtesting.constant import SignalType, ExitType, EntryType
 from src.backtesting.instrument import Instrument
 from src.backtesting.historical_data.db_api import DBApi
 from src.backtesting.exception import BackTestingError
@@ -21,7 +22,8 @@ class HullMABackTesting(BaseBackTesting):
     """ Hull moving average backtesting """
     OUTPUT_EXCEL_COLUMNS = [
         "Trade", "Script", "Strike", "Expiry", "LotSize", "PEEntryExitTime", "PESell",
-        "PEProfitLoss", "PEExitType", "CEEntryExitTime", "CEBuy", "CEProfitLoss", "CEExitType"
+        "PEProfitLoss", "PEEntryExitType", "CEEntryExitTime", "CEBuy", "CEProfitLoss",
+        "CEEntryExitType"
     ]
 
     def __init__(self, config_file_path: str):
@@ -69,45 +71,14 @@ class HullMABackTesting(BaseBackTesting):
                 self._logger.info(
                     f"Exit signal triggered at {row['Date/Time']} for price {row['Price']}"
                 )
+                # This is the signal exit datetime
                 exit_datetime = self.get_market_hour_datetime(row["Date/Time"])
                 lot_size = int(row["Contracts"])
                 # Mode in which we close all the position at day end and take the same position
                 # again on next day
                 if close_position_day_end:
                     # Close the active position at day end and again take the position next day
-                    if self._entry_datetime.date() == exit_datetime.date():
-                        # Entry and exit on same day. Nothing special about this case.
-                        self.exit(exit_datetime=exit_datetime, lot_size=lot_size)
-                    else:
-                        final_exit_date = min(exit_datetime.date(), self._active_instrument_expiry)
-                        exit_date = self._entry_datetime.date()
-                        while exit_date <= final_exit_date:
-                            day_exit_datetime = datetime.datetime.combine(
-                                exit_date, datetime.time(hour=15, minute=29)
-                            )
-                            if exit_date == final_exit_date:
-                                self.exit(exit_datetime=exit_datetime, lot_size=lot_size)
-                                break
-                            self._logger.info(f"Soft exiting at {day_exit_datetime}")
-                            self.exit(
-                                exit_datetime=day_exit_datetime,
-                                lot_size=lot_size,
-                                soft_exit=True
-                            )
-                            if not self._trade_pe_next_day and not self._trade_ce_next_day:
-                                break
-                            exit_date = self.get_next_valid_exit_date(exit_date)
-                            day_start_datetime = datetime.datetime.combine(
-                                exit_date, datetime.time(hour=9, minute=15)
-                            )
-                            self._logger.info(f"Soft entry at {day_start_datetime}")
-                            self.entry(
-                                entry_strike=self._entry_strike,
-                                entry_datetime=day_start_datetime,
-                                lot_size=lot_size,
-                                expiry=self._active_instrument_expiry,
-                                soft_entry=True
-                            )
+                    self.soft_entry_exit(exit_datetime=exit_datetime, lot_size=lot_size)
                 else:
                     self.exit(exit_datetime=exit_datetime, lot_size=lot_size)
 
@@ -295,8 +266,8 @@ class HullMABackTesting(BaseBackTesting):
         with DBApi(Path(self.config["db_file_path"])) as db_api:
             return db_api.is_holiday(dt=dt)
 
-    def get_next_valid_exit_date(self, current_exit_date: datetime.date) -> datetime.date:
-        """ Return the next valid exit date which is not a weekend nor a holiday """
+    def get_next_valid_date(self, current_exit_date: datetime.date) -> datetime.date:
+        """ Return the next valid date which is not a weekend nor a holiday """
         # If the exit date is Friday, then add 3 days
         # Monday is 0 and Sunday is 6
         self._logger.info(f"Finding the next valid exit date for {current_exit_date}")
@@ -327,9 +298,10 @@ class HullMABackTesting(BaseBackTesting):
             index=self.config["script"], strike=entry_strike, expiry=expiry
         )
         # Take CE entry when soft_entry is False (actual signal entry) or when soft_entry is True
-        # and self._trade_ce_next_day is True which means SL not hit previous day
+        # and self._trade_ce_next_day is True which means SL not hit on previous day
         # Soft entry is true when we close an entry on the day end and take the same entry next day
         ce_instrument_price = 0
+        ce_entry_type = ""
         if not soft_entry or (soft_entry and self._trade_ce_next_day):
             self.CE_ENTRY_INSTRUMENT = self.get_ce_entry_instrument(
                 entry_strike=entry_strike,
@@ -337,6 +309,7 @@ class HullMABackTesting(BaseBackTesting):
                 lot_size=lot_size,
                 expiry=expiry
             )
+            ce_entry_type = EntryType.SOFT_ENTRY if soft_entry else EntryType.ENTRY_SIGNAL
             ce_instrument_price = self.CE_ENTRY_INSTRUMENT.price
             # Check CE instrument premium
             if not self.trade_ce_instrument(self.CE_ENTRY_INSTRUMENT):
@@ -345,10 +318,12 @@ class HullMABackTesting(BaseBackTesting):
                     f"specified in config file. Ignoring CE trading."
                 )
                 self.CE_ENTRY_INSTRUMENT = None
+                ce_entry_type = ""
         # Take PE entry when soft_entry is False (actual signal entry) or when soft_entry is True
-        # and self._trade_ce_next_day is True which means SL not hit previous day
+        # and self._trade_ce_next_day is True which means SL not hit on previous day
         # Soft entry is true when we close an entry on the day end and take the same entry next day
         pe_instrument_price = 0
+        pe_entry_type = ""
         if not soft_entry or (soft_entry and self._trade_pe_next_day):
             self.PE_ENTRY_INSTRUMENT = self.get_pe_entry_instrument(
                 entry_strike=entry_strike,
@@ -356,6 +331,7 @@ class HullMABackTesting(BaseBackTesting):
                 lot_size=lot_size,
                 expiry=expiry
             )
+            pe_entry_type = EntryType.SOFT_ENTRY if soft_entry else EntryType.ENTRY_SIGNAL
             pe_instrument_price = self.PE_ENTRY_INSTRUMENT.price
         self._trade_count += 1
         df_data = {
@@ -368,11 +344,11 @@ class HullMABackTesting(BaseBackTesting):
             "PEEntryExitTime": entry_datetime,
             "PESell": pe_instrument_price,
             "PEProfitLoss": 0,
-            "PEExitType": "",
+            "PEEntryExitType": pe_entry_type,
             "CEEntryExitTime": entry_datetime,
             "CEBuy": ce_instrument_price,
             "CEProfitLoss": 0,
-            "CEExitType": ""
+            "CEEntryExitType": ce_entry_type
         }
         df = pd.DataFrame([list(df_data.values())], columns=list(df_data.keys()))
         self._output_df = pd.concat([self._output_df, df], axis=0)
@@ -390,6 +366,8 @@ class HullMABackTesting(BaseBackTesting):
         assert active_instrument is not None, "Both PE and CE instrument is None inside " \
                                               "exit function"
         expiry = active_instrument.expiry
+        # Determine the actual exit time of the trade. If the signal exit datetime is more than
+        # expiry then actual exit time is expiry.
         if exit_datetime.date() > expiry:
             ce_exit_type = pe_exit_type = ExitType.EXPIRY_EXIT
             ce_actual_exit_datetime = pe_actual_exit_datetime = datetime.datetime.combine(
@@ -398,6 +376,10 @@ class HullMABackTesting(BaseBackTesting):
         else:
             ce_exit_type = pe_exit_type = ExitType.EXIT_SIGNAL
             ce_actual_exit_datetime = pe_actual_exit_datetime = exit_datetime
+
+        # Exiting the trade at day end
+        if soft_exit:
+            ce_exit_type = pe_exit_type = ExitType.SOFT_EXIT
 
         # Variables to track if the instrument is exited due to SL
         ce_instrument_sl_hit = False
@@ -501,11 +483,11 @@ class HullMABackTesting(BaseBackTesting):
             "PEEntryExitTime": pe_actual_exit_datetime,
             "PESell": pe_exit_price,
             "PEProfitLoss": pe_profit_loss,
-            "PEExitType": pe_exit_type,
+            "PEEntryExitType": pe_exit_type,
             "CEEntryExitTime": ce_actual_exit_datetime,
             "CEBuy": ce_exit_price,
             "CEProfitLoss": ce_profit_loss,
-            "CEExitType": ce_exit_type
+            "CEEntryExitType": ce_exit_type
         }
         df = pd.DataFrame([list(df_data.values())], columns=list(df_data.keys()))
         self._output_df = pd.concat([self._output_df, df], axis=0)
@@ -515,7 +497,6 @@ class HullMABackTesting(BaseBackTesting):
             self.PE_ENTRY_INSTRUMENT = None
         if self.CE_ENTRY_INSTRUMENT is not None and self.CE_ENTRY_INSTRUMENT.lot_size == 0:
             self.CE_ENTRY_INSTRUMENT = None
-
         # In soft exit mode, if SL not hit then take the same position next day
         if soft_exit:
             if not ce_instrument_sl_hit:
@@ -523,9 +504,54 @@ class HullMABackTesting(BaseBackTesting):
             if not pe_instrument_sl_hit:
                 self._trade_pe_next_day = True
 
+    def soft_entry_exit(self, exit_datetime: datetime.datetime, lot_size: int) -> None:
+        """
+        Logic for soft entry and exit. Used when we close position at day end and take the same
+        position again next day.
+        exit_datetime is the signal exit datetime
+        """
+        final_exit_date = min(exit_datetime.date(), self._active_instrument_expiry)
+        exit_date = self._entry_datetime.date()
+        while exit_date <= final_exit_date:
+            day_exit_datetime = datetime.datetime.combine(
+                exit_date, datetime.time(hour=15, minute=29)
+            )
+            if exit_date == final_exit_date:
+                # This is the final day when we should square off the both CE and PE position
+                # We are passing signal exit datetime and soft_exit is by default false.
+                # So exit status will be calculated in the exit function by comparing signal
+                # exit date and expiry
+                self.exit(exit_datetime=exit_datetime, lot_size=lot_size)
+                break
+            self._logger.info(f"Soft exiting at {day_exit_datetime}")
+            self.exit(
+                exit_datetime=day_exit_datetime,
+                lot_size=lot_size,
+                soft_exit=True
+            )
+            if not self._trade_pe_next_day and not self._trade_ce_next_day:
+                # This will be True if both CE and PE SL hit before the exit date.
+                # If SL mode is deactivated, code shouldn't reach this condition
+                break
+            exit_date = self.get_next_valid_date(exit_date)
+            day_start_datetime = datetime.datetime.combine(
+                exit_date, datetime.time(hour=9, minute=15)
+            )
+            self._logger.info(f"Soft entry at {day_start_datetime}")
+            self.entry(
+                entry_strike=self._entry_strike,
+                entry_datetime=day_start_datetime,
+                lot_size=lot_size,
+                expiry=self._active_instrument_expiry,
+                soft_entry=True
+            )
+
     def execute(self) -> None:
         """ Execute backtesting """
+        start_time = time.time()
         super(HullMABackTesting, self).execute()
         self.process_input()
         self.save_df_to_excel(self._output_df, self.config["output_excel_file_path"])
         self._logger.info(f"Output excel is saved to {self.config['output_excel_file_path']}")
+        execution_time = time.time() - start_time
+        self._logger.info(f"Execution time: {execution_time // 60} minutes")

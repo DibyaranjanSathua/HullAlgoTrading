@@ -17,5 +17,10 @@ class ExitType:
     MISSING_DATA: str = "Missing Data"
     CE_PREMIUM_EXIT: str = "CE not traded due to premium check"
     NO_TRADE: str = "No Trade"
-    SOFT_EXIT: str = "SOft Exit"
+    SOFT_EXIT: str = "Soft Exit"
     INVALID_EXIT: str = "Invalid Exit"
+
+
+class EntryType:
+    ENTRY_SIGNAL: str = "Entry Signal"
+    SOFT_ENTRY: str = "Soft Entry"
