@@ -1,18 +1,21 @@
 {
   "script": "NIFTY",
   "quantity_per_lot": 50,
+  "close_position_day_end": false,
+  "SL_check": null,
   "ce_premium_check": {
     "premium": 10000,
     "__comment": "Premium is per lot. So in code I am multiplying it by lot_size."
   },
-  "close_position_day_end": true,
-  "SL_check": {
-    "PE": 100,
-    "CE": 50
-  },
   "missing_data": [
     {
       "strike": 17400,
+      "start_datetime": "2022-02-03 09:15:00",
+      "end_datetime": "2022-02-03 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 17550,
       "start_datetime": "2022-02-03 09:15:00",
       "end_datetime": "2022-02-03 15:29:00",
       "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
@@ -24,7 +27,7 @@
       "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
     }
   ],
-  "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/input.xlsx",
+  "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/NIFTY_MovingAvg_RSI.xlsx",
   "output_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/output.xlsx",
   "db_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/database.sqlite"
 }

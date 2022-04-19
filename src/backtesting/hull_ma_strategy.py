@@ -58,7 +58,7 @@ class HullMABackTesting(BaseBackTesting):
                 self._entry_datetime = self.get_market_hour_datetime(row["Date/Time"])
                 self._entry_strike = self.get_entry_strike(row["Price"])
                 self._active_instrument_expiry = self.get_current_week_expiry(
-                    self._entry_datetime.date(), self.config["db_file_path"]
+                    self._entry_datetime.date()
                 )
                 lot_size = int(row["Contracts"])
                 self.entry(
@@ -260,25 +260,6 @@ class HullMABackTesting(BaseBackTesting):
                 return True, float(data["close"]), \
                        datetime.datetime.strptime(data["dt"], "%Y-%m-%d %H:%M:%S.%f")
         return False, None, None
-
-    def is_holiday(self, dt: datetime.date) -> bool:
-        """ Return True is the day is holiday """
-        with DBApi(Path(self.config["db_file_path"])) as db_api:
-            return db_api.is_holiday(dt=dt)
-
-    def get_next_valid_date(self, current_exit_date: datetime.date) -> datetime.date:
-        """ Return the next valid date which is not a weekend nor a holiday """
-        # If the exit date is Friday, then add 3 days
-        # Monday is 0 and Sunday is 6
-        self._logger.info(f"Finding the next valid exit date for {current_exit_date}")
-        next_exit_date = current_exit_date
-        while True:
-            next_exit_date += datetime.timedelta(days=1)
-            # Saturday and Sunday
-            if next_exit_date.weekday() in (5, 6) or self.is_holiday(dt=next_exit_date):
-                continue
-            break
-        return next_exit_date
 
     def entry(
             self,
@@ -554,4 +535,4 @@ class HullMABackTesting(BaseBackTesting):
         self.save_df_to_excel(self._output_df, self.config["output_excel_file_path"])
         self._logger.info(f"Output excel is saved to {self.config['output_excel_file_path']}")
         execution_time = time.time() - start_time
-        self._logger.info(f"Execution time: {execution_time // 60} minutes")
+        self._logger.info(f"Execution time: {execution_time} seconds")

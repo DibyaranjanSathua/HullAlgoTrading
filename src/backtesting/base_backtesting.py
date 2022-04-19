@@ -52,7 +52,7 @@ class BaseBackTesting:
             raise FileNotFoundError(f"{filepath} doesn't exist")
         return pd.read_excel(
             filepath,
-            sheet_name=1,
+            sheet_name=0,
             header=0,
             usecols="A:F",
             converters={"Date/Time": pd.to_datetime}
@@ -63,15 +63,13 @@ class BaseBackTesting:
         """ Save the dataframe to excel """
         df.to_excel(filepath, header=True, index=False)
 
-    def get_current_week_expiry(
-            self, signal_date: datetime.date, db_file_path: str
-    ) -> datetime.date:
+    def get_current_week_expiry(self, signal_date: datetime.date) -> datetime.date:
         """ Return the current week expiry date """
         # Monday is 0 and Sunday is 6. Thursday is 3
         offset = (3 - signal_date.weekday()) % 7
         expiry = signal_date + datetime.timedelta(days=offset)
         # Check if expiry is a holiday
-        with DBApi(Path(db_file_path)) as db_api:
+        with DBApi(Path(self.config["db_file_path"])) as db_api:
             holiday = db_api.is_holiday(expiry)
         if holiday:
             self._logger.info(f"Expiry {expiry} is a holiday")
@@ -83,8 +81,26 @@ class BaseBackTesting:
         """ Return the nearest 50 strike less than the index value """
         return int((index // 50) * 50)
 
-    @staticmethod
-    def get_market_hour_datetime(signal_datetime: datetime.datetime) -> datetime.datetime:
+    def is_holiday(self, dt: datetime.date) -> bool:
+        """ Return True is the day is holiday """
+        with DBApi(Path(self.config["db_file_path"])) as db_api:
+            return db_api.is_holiday(dt=dt)
+
+    def get_next_valid_date(self, current_exit_date: datetime.date) -> datetime.date:
+        """ Return the next valid date which is not a weekend nor a holiday """
+        # If the exit date is Friday, then add 3 days
+        # Monday is 0 and Sunday is 6
+        self._logger.info(f"Finding the next valid exit date for {current_exit_date}")
+        next_exit_date = current_exit_date
+        while True:
+            next_exit_date += datetime.timedelta(days=1)
+            # Saturday or Sunday or holiday
+            if next_exit_date.weekday() in (5, 6) or self.is_holiday(dt=next_exit_date):
+                continue
+            break
+        return next_exit_date
+
+    def get_market_hour_datetime(self, signal_datetime: datetime.datetime) -> datetime.datetime:
         """
         Return the actual datetime of signal.
         If time < 9:15, return same day 9:15
@@ -95,13 +111,7 @@ class BaseBackTesting:
         if signal_time.hour == 9 and signal_time.minute < 15:
             return datetime.datetime.combine(signal_date, datetime.time(hour=9, minute=15))
         if signal_time.hour == 15 and signal_time.minute > 29:
-            # If signal_date is on Friday then entry date will be on monday
-            # Monday is 0 and Sunday is 6. Thursday is 3
-            if signal_date.weekday() == 4:
-                time_delta = datetime.timedelta(days=3)
-            else:
-                time_delta = datetime.timedelta(days=1)
-            entry_date = signal_date + time_delta
+            entry_date = self.get_next_valid_date(signal_date)
             return datetime.datetime.combine(entry_date, datetime.time(hour=9, minute=15))
         return signal_datetime
 
