@@ -15,6 +15,7 @@ from src.backtesting.constant import SignalType, ExitType, EntryType
 from src.backtesting.instrument import Instrument
 from src.backtesting.historical_data.db_api import DBApi
 from src.backtesting.exception import BackTestingError
+from src.backtesting.strategy_analysis import StrategyAnalysis, ConsecutiveWinLoss
 from src.utils.logger import LogFacade
 
 
@@ -41,6 +42,11 @@ class HullMABackTesting(BaseBackTesting):
         # again next day. Used when close_position_day_end is set to true in config
         self._trade_ce_next_day: bool = False
         self._trade_pe_next_day: bool = False
+        # Strategy analysis
+        self._pe_strategy_analysis: StrategyAnalysis = StrategyAnalysis()
+        self._pe_strategy_analysis.consecutive_win_loss = ConsecutiveWinLoss()
+        self._ce_strategy_analysis: StrategyAnalysis = StrategyAnalysis()
+        self._ce_strategy_analysis.consecutive_win_loss = ConsecutiveWinLoss()
 
     def process_input(self):
         """ Process the input excel row by row """
@@ -278,6 +284,11 @@ class HullMABackTesting(BaseBackTesting):
         self.fetch_historical_price(
             index=self.config["script"], strike=entry_strike, expiry=expiry
         )
+        # Strategy analysis
+        if self._pe_strategy_analysis.lot_size < lot_size:
+            self._pe_strategy_analysis.lot_size = lot_size
+        if self._ce_strategy_analysis.lot_size < lot_size:
+            self._ce_strategy_analysis.lot_size = lot_size
         # Take CE entry when soft_entry is False (actual signal entry) or when soft_entry is True
         # and self._trade_ce_next_day is True which means SL not hit on previous day
         # Soft entry is true when we close an entry on the day end and take the same entry next day
@@ -315,6 +326,11 @@ class HullMABackTesting(BaseBackTesting):
             pe_entry_type = EntryType.SOFT_ENTRY if soft_entry else EntryType.ENTRY_SIGNAL
             pe_instrument_price = self.PE_ENTRY_INSTRUMENT.price
         self._trade_count += 1
+        # Strategy Analysis
+        if self.PE_ENTRY_INSTRUMENT:
+            self._pe_strategy_analysis.total_trades += 1
+        if self.CE_ENTRY_INSTRUMENT:
+            self._ce_strategy_analysis.total_trades += 1
         df_data = {
             "Trade": self._trade_count,
             "Script": self.config["script"],
@@ -403,6 +419,14 @@ class HullMABackTesting(BaseBackTesting):
             ce_profit_loss = (ce_exit_price - self.CE_ENTRY_INSTRUMENT.price) * lot_size * \
                              quantity_per_lot
             self.CE_ENTRY_INSTRUMENT.lot_size -= lot_size
+            # Strategy analysis
+            if ce_profit_loss > 0:
+                self._ce_strategy_analysis.profit += ce_profit_loss
+                self._ce_strategy_analysis.win_trades += 1
+            else:
+                self._ce_strategy_analysis.loss += ce_profit_loss
+                self._ce_strategy_analysis.loss_trades += 1
+            self._ce_strategy_analysis.consecutive_win_loss.compute(ce_profit_loss)
         else:
             if soft_exit:
                 ce_exit_type = ExitType.NO_TRADE
@@ -447,6 +471,14 @@ class HullMABackTesting(BaseBackTesting):
                              quantity_per_lot
             # Decrease the lot size from the entry instrument
             self.PE_ENTRY_INSTRUMENT.lot_size -= lot_size
+            # Strategy analysis
+            if pe_profit_loss > 0:
+                self._pe_strategy_analysis.profit += pe_profit_loss
+                self._pe_strategy_analysis.win_trades += 1
+            else:
+                self._pe_strategy_analysis.loss += pe_profit_loss
+                self._pe_strategy_analysis.loss_trades += 1
+            self._pe_strategy_analysis.consecutive_win_loss.compute(pe_profit_loss)
         else:
             if soft_exit:
                 pe_exit_type = ExitType.NO_TRADE
@@ -536,3 +568,8 @@ class HullMABackTesting(BaseBackTesting):
         self._logger.info(f"Output excel is saved to {self.config['output_excel_file_path']}")
         execution_time = time.time() - start_time
         self._logger.info(f"Execution time: {execution_time} seconds")
+        # Print strategy analysis
+        print("CE Buy Analysis")
+        self._ce_strategy_analysis.print_analysis()
+        print("PE Sell Analysis")
+        self._pe_strategy_analysis.print_analysis()
