@@ -27,8 +27,17 @@ class HullMABackTesting(BaseBackTesting):
         "CEEntryExitType"
     ]
 
-    def __init__(self, config_file_path: str):
-        super(HullMABackTesting, self).__init__(config_file_path=config_file_path)
+    def __init__(
+            self,
+            config_file_path: str,
+            input_excel_file_path: Optional[str] = None,
+            output_excel_file_path: Optional[str] = None
+    ):
+        super(HullMABackTesting, self).__init__(
+            config_file_path=config_file_path,
+            input_excel_file_path=input_excel_file_path,
+            output_excel_file_path=output_excel_file_path
+        )
         self._ce_historical_data: List[sqlite3.Row] = []
         self._pe_historical_data: List[sqlite3.Row] = []
         self._logger: LogFacade = LogFacade("hull_ma_backtesting")
@@ -570,6 +579,16 @@ class HullMABackTesting(BaseBackTesting):
         self._logger.info(f"Execution time: {execution_time} seconds")
         # Print strategy analysis
         print("CE Buy Analysis")
+        self._ce_strategy_analysis.initial_capital = self.config.get("initial_capital_ce")
         self._ce_strategy_analysis.print_analysis()
         print("PE Sell Analysis")
+        self._pe_strategy_analysis.initial_capital = self.config.get("initial_capital_pe")
         self._pe_strategy_analysis.print_analysis()
+
+    @property
+    def ce_strategy_analysis(self) -> StrategyAnalysis:
+        return self._ce_strategy_analysis
+
+    @property
+    def pe_strategy_analysis(self) -> StrategyAnalysis:
+        return self._pe_strategy_analysis

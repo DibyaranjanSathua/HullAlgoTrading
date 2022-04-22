@@ -1,6 +1,8 @@
 {
   "script": "NIFTY",
   "quantity_per_lot": 50,
+  "initial_capital_ce": 100000,
+  "initial_capital_pe": 200000,
   "ce_premium_check": {
     "premium": 10000,
     "__comment": "Premium is per lot. So in code I am multiplying it by lot_size."

@@ -28,10 +28,12 @@ class ConsecutiveWinLoss:
         elif profit_loss <= 0 < self.prev_trade:
             self.prev_trade = -1
             self.consecutive_win = max(self.consecutive_win, self.temp_consecutive_win)
+            self.temp_consecutive_win = 0
         # current trade is profit but previous trade was in loss. Breaks the losing streak
         elif self.prev_trade < 0 < profit_loss:
             self.prev_trade = 1
             self.consecutive_loss = max(self.consecutive_loss, self.temp_consecutive_loss)
+            self.temp_consecutive_loss = 0
 
 
 @dataclass()
@@ -52,11 +54,15 @@ class StrategyAnalysis:
 
     @property
     def avg_win(self) -> float:
-        return round(self.profit / self.win_trades, 2)
+        if self.win_trades:
+            return round(self.profit / self.win_trades, 2)
+        return 0
 
     @property
     def avg_loss(self) -> float:
-        return round(self.loss / self.loss_trades, 2)
+        if self.loss_trades:
+            return round(self.loss / self.loss_trades, 2)
+        return 0
 
     @property
     def ending_capital(self) -> Optional[float]:
@@ -68,27 +74,39 @@ class StrategyAnalysis:
     def capital_returns(self) -> Optional[float]:
         if self.initial_capital is None:
             return None
-        return self.initial_capital / self.ending_capital
+        return round(self.ending_capital / self.initial_capital * 100, 2)
 
     @property
     def win_percent(self) -> float:
-        return round(self.win_trades / self.total_trades * 100, 2)
+        if self.total_trades:
+            return round(self.win_trades / self.total_trades * 100, 2)
+        return 0
 
     @property
     def loss_percent(self) -> float:
-        return round(self.loss_trades / self.total_trades * 100, 2)
+        if self.total_trades:
+            return round(self.loss_trades / self.total_trades * 100, 2)
+        return 0
 
     @property
     def win_ratio(self) -> float:
-        return round(self.win_trades / self.loss_trades, 2)
+        if self.loss_trades:
+            return round(self.win_trades / self.loss_trades, 2)
+        return 0
 
     @property
     def avg_win_loss(self) -> float:
-        return round(self.avg_win / abs(self.avg_loss), 2)
+        if self.avg_loss:
+            return round(self.avg_win / abs(self.avg_loss), 2)
+        return 0
 
     @property
     def profit_potential(self) -> float:
-        return round((self.avg_win * self.win_trades) / (abs(self.avg_loss) * self.loss_trades), 2)
+        if self.avg_loss and self.loss_trades:
+            return round(
+                (self.avg_win * self.win_trades) / (abs(self.avg_loss) * self.loss_trades), 2
+            )
+        return 0
 
     def print_analysis(self):
         print(f"Initial Capital: {self.initial_capital}")

@@ -35,6 +35,9 @@ class ConfigReader:
     def __getitem__(self, item: str):
         return self._config[item]
 
+    def __setitem__(self, key, value):
+        self._config[key] = value
+
     def __contains__(self, item: str):
         return item in self._config
 

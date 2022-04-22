@@ -1,6 +1,8 @@
 {
   "script": "NIFTY",
   "quantity_per_lot": 50,
+  "initial_capital_ce": 100000,
+  "initial_capital_pe": 200000,
   "close_position_day_end": false,
   "SL_check": null,
   "ce_premium_check": {

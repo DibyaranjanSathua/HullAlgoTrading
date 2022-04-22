@@ -7,6 +7,7 @@ from typing import Optional
 import pandas as pd
 from pathlib import Path
 import datetime
+import os
 
 from src.backtesting.instrument import Instrument
 from src.backtesting.config_reader import ConfigReader
@@ -21,9 +22,16 @@ class BaseBackTesting:
     CE_ENTRY_INSTRUMENT: Optional[Instrument] = None
     PE_ENTRY_INSTRUMENT: Optional[Instrument] = None
 
-    def __init__(self, config_file_path: str):
+    def __init__(
+            self,
+            config_file_path: str,
+            input_excel_file_path: Optional[str] = None,
+            output_excel_file_path: Optional[str] = None
+    ):
         self._config_file_path: Path = Path(config_file_path)
         self.config: Optional[ConfigReader] = None
+        self._input_excel_file_path = input_excel_file_path
+        self._output_excel_file_path = output_excel_file_path
         self._logger: LogFacade = LogFacade("base_backtesting")
 
     def is_entry_taken(self) -> bool:
@@ -44,6 +52,13 @@ class BaseBackTesting:
             raise ConfigFileError(
                 "quantity_per_lot attribute is required when ce_premium_check is set"
             )
+        if self._input_excel_file_path is not None:
+            self.config["input_excel_file_path"] = self._input_excel_file_path
+        if self._output_excel_file_path is not None:
+            self.config["output_excel_file_path"] = self._output_excel_file_path
+        # If database file path is set in env var, use that path
+        if "db_file_path" in os.environ:
+            self.config["db_file_path"] = os.environ["db_file_path"]
 
     @staticmethod
     def read_input_excel_to_df(filepath: Path) -> pd.DataFrame:
