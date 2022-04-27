@@ -116,7 +116,7 @@ class DBApiPostgres:
     @staticmethod
     def fetch_historical_data(
             session: Session, index: str, strike: int, option_type: str, expiry: datetime.date
-    ) -> List[HistoricalPrice]:
+    ):
         return session.query(HistoricalPrice).join(OptionStrike).join(StockIndex).filter(
             StockIndex.name == index,
             OptionStrike.strike == strike,
@@ -127,7 +127,7 @@ class DBApiPostgres:
     @staticmethod
     def fetch_option_strike(
         session: Session, index: str, strike: int, option_type: str, expiry: datetime.date
-    ) -> OptionStrike:
+    ):
         return session.query(OptionStrike).join(StockIndex).filter(
             StockIndex.name == index,
             OptionStrike.strike == strike,
@@ -245,6 +245,7 @@ class DBApiSqLite:
 
 
 if __name__ == "__main__":
+    from src.backtesting.historical_data.database import SessionLocal
     db_file = "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/" \
               "database.sqlite"
     with DBApiSqLite(Path(db_file)) as db_api:
@@ -266,3 +267,14 @@ if __name__ == "__main__":
     with DBApiSqLite(Path(db_file)) as db_api:
         holiday = db_api.is_holiday(dt=datetime.date(day=12, month=1, year=2022))
         print(holiday)
+
+    with SessionLocal() as session:
+        data = DBApiPostgres.fetch_historical_data(
+            session=session,
+            index="NIFTY",
+            strike=9250,
+            option_type="CE",
+            expiry=datetime.date(day=27, month=10, year=2016)
+        )
+        for x in data:
+            print(x)

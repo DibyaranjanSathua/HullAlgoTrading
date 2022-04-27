@@ -86,17 +86,6 @@ class CSV2DB:
                     "option_strike_id": option_strike.id
                 })
         DBApiPostgres.create_bulk_historical_price(session=session, items=items)
-                # DBApiPostgres.create_historical_price(
-                #     session,
-                #     open=float(row["Open"]),
-                #     high=float(row["High"]),
-                #     low=float(row["Low"]),
-                #     close=float(row["Close"]),
-                #     volume=int(row["Volume"]),
-                #     oi=int(row["OI"]),
-                #     ticker_datetime=ticket_datetime,
-                #     option_strike_id=option_strike.id
-                # )
 
     def parse_filename(self, session: Session, filename: str) -> Instrument:
         """ Parse filename to get the instrument """
