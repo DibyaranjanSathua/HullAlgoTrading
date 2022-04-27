@@ -4,14 +4,17 @@ Author:         Dibyaranjan Sathua
 Created on:     16/04/22, 12:17 pm
 """
 from typing import Optional
-import pandas as pd
 from pathlib import Path
 import datetime
 import os
 
+import pandas as pd
+from sqlalchemy.orm import Session
+
 from src.backtesting.instrument import Instrument
 from src.backtesting.config_reader import ConfigReader
-from src.backtesting.historical_data.db_api import DBApi
+from src.backtesting.historical_data.db_api import DBApiPostgres
+from src.backtesting.historical_data.database import SessionLocal
 from src.backtesting.exception import ConfigFileError
 from src.utils.logger import LogFacade
 
@@ -29,10 +32,15 @@ class BaseBackTesting:
             output_excel_file_path: Optional[str] = None
     ):
         self._config_file_path: Path = Path(config_file_path)
-        self.config: Optional[ConfigReader] = None
         self._input_excel_file_path = input_excel_file_path
         self._output_excel_file_path = output_excel_file_path
         self._logger: LogFacade = LogFacade("base_backtesting")
+        self.config: Optional[ConfigReader] = None
+        self.session: Optional[Session] = None
+
+    def __del__(self):
+        if self.session is not None:
+            self.session.close()
 
     def is_entry_taken(self) -> bool:
         """ Returns True if an entry has taken else returns False """
@@ -40,6 +48,7 @@ class BaseBackTesting:
 
     def execute(self):
         """ execute back-testing """
+        self.session = SessionLocal()
         self.config = ConfigReader(self._config_file_path)
         if "input_excel_file_path" not in self.config:
             raise ConfigFileError("Missing input_excel_file_path attribute in config file")
@@ -83,12 +92,21 @@ class BaseBackTesting:
         # Monday is 0 and Sunday is 6. Thursday is 3
         offset = (3 - signal_date.weekday()) % 7
         expiry = signal_date + datetime.timedelta(days=offset)
-        # Check if expiry is a holiday
-        with DBApi(Path(self.config["db_file_path"])) as db_api:
-            holiday = db_api.is_holiday(expiry)
+        return self.get_valid_expiry(expiry=expiry)
+
+    def get_valid_expiry(self, expiry: datetime.date) -> datetime.date:
+        """ Return a valid expiry which is not a weekend nor a holiday """
+        holiday = DBApiPostgres.is_holiday(self.session, expiry)
         if holiday:
-            self._logger.info(f"Expiry {expiry} is a holiday")
-            expiry -= datetime.timedelta(days=1)
+            valid_expiry = expiry
+            while True:
+                valid_expiry -= datetime.timedelta(days=1)
+                # Saturday or Sunday or holiday
+                if valid_expiry.weekday() in (5, 6) or \
+                        self.is_holiday(valid_expiry):
+                    continue
+                break
+            return valid_expiry
         return expiry
 
     @staticmethod
@@ -96,10 +114,9 @@ class BaseBackTesting:
         """ Return the nearest 50 strike less than the index value """
         return int((index // 50) * 50)
 
-    def is_holiday(self, dt: datetime.date) -> bool:
+    def is_holiday(self,  dt: datetime.date) -> bool:
         """ Return True is the day is holiday """
-        with DBApi(Path(self.config["db_file_path"])) as db_api:
-            return db_api.is_holiday(dt=dt)
+        return DBApiPostgres.is_holiday(self.session, dt=dt)
 
     def get_next_valid_date(self, current_exit_date: datetime.date) -> datetime.date:
         """ Return the next valid date which is not a weekend nor a holiday """

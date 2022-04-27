@@ -13,7 +13,8 @@ import sqlite3
 from src.backtesting.base_backtesting import BaseBackTesting
 from src.backtesting.constant import SignalType, ExitType, EntryType
 from src.backtesting.instrument import Instrument
-from src.backtesting.historical_data.db_api import DBApi
+from src.backtesting.historical_data.db_api import DBApiPostgres
+from src.backtesting.historical_data.models import HistoricalPrice
 from src.backtesting.exception import BackTestingError
 from src.backtesting.strategy_analysis import StrategyAnalysis, ConsecutiveWinLoss
 from src.utils.logger import LogFacade
@@ -38,8 +39,8 @@ class HullMABackTesting(BaseBackTesting):
             input_excel_file_path=input_excel_file_path,
             output_excel_file_path=output_excel_file_path
         )
-        self._ce_historical_data: List[sqlite3.Row] = []
-        self._pe_historical_data: List[sqlite3.Row] = []
+        self._ce_historical_data: List[HistoricalPrice] = []
+        self._pe_historical_data: List[HistoricalPrice] = []
         self._logger: LogFacade = LogFacade("hull_ma_backtesting")
         self._output_df: pd.DataFrame = pd.DataFrame(columns=[])
         self._trade_count: int = 0
@@ -100,19 +101,20 @@ class HullMABackTesting(BaseBackTesting):
     def fetch_historical_price(self, index: str, strike: int, expiry: datetime.date) -> None:
         """ Get the list of CE historical price data """
         self._logger.info(f"Fetching historical data for {index} {strike} for expiry {expiry}")
-        with DBApi(Path(self.config["db_file_path"])) as db_api:
-            self._ce_historical_data = db_api.fetch_historical_data(
-                index=index,
-                strike=strike,
-                option_type="CE",
-                expiry=expiry
-            )
-            self._pe_historical_data = db_api.fetch_historical_data(
-                index=index,
-                strike=strike,
-                option_type="PE",
-                expiry=expiry
-            )
+        self._ce_historical_data = DBApiPostgres.fetch_historical_data(
+            session=self.session,   # Created in base class
+            index=index,
+            strike=strike,
+            option_type="CE",
+            expiry=expiry
+        )
+        self._pe_historical_data = DBApiPostgres.fetch_historical_data(
+            session=self.session,   # Created in base class
+            index=index,
+            strike=strike,
+            option_type="PE",
+            expiry=expiry
+        )
 
     def get_historical_price_by_datetime(self, option_type: str, dt: datetime.datetime) -> float:
         """ Filter out the price by datetime """
@@ -127,14 +129,13 @@ class HullMABackTesting(BaseBackTesting):
                 for x in historical_data
                 # Some of the minutes data is not available. So we take the next minute available
                 # data for the same day
-                if datetime.datetime.strptime(x["dt"], "%Y-%m-%d %H:%M:%S.%f").date() == dt.date()
-                   and datetime.datetime.strptime(x["dt"], "%Y-%m-%d %H:%M:%S.%f") >= dt
+                if x.ticker_datetime.date() == dt.date() and x.ticker_datetime >= dt
             ),
             None
         )
         if price_data is None:
             raise BackTestingError(f"price data is missing for {dt}")
-        return float(price_data["close"])
+        return float(price_data.close)
 
     def get_ce_entry_instrument(
             self,
@@ -227,7 +228,7 @@ class HullMABackTesting(BaseBackTesting):
             start_datetime: datetime.datetime,
             end_datetime: datetime.datetime,
             option_type: str
-    ) -> List[sqlite3.Row]:
+    ) -> List[HistoricalPrice]:
         """
         Returns price range minute by minute data between start datetime and end datetime.
         This is use for checking SL hit. Start datetime is entry datetime and end datetime is
@@ -241,8 +242,7 @@ class HullMABackTesting(BaseBackTesting):
         return [
             x
             for x in historical_data
-            if start_datetime < datetime.datetime.strptime(x["dt"], "%Y-%m-%d %H:%M:%S.%f") <
-               end_datetime
+            if start_datetime < x.ticker_datetime < end_datetime
         ]
 
     def instrument_stop_loss_hit(

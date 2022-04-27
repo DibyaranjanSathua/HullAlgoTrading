@@ -34,6 +34,9 @@ class OptionStrike(Base):
     stock_index = relationship("StockIndex", back_populates="option_strikes")
     historical_prices = relationship("HistoricalPrice", back_populates="option_strike")
 
+    def __repr__(self):
+        return f"[{self.id}] {self.name} {self.expiry}"
+
 
 class HistoricalPrice(Base):
     """ Store historical price of """
@@ -54,6 +57,10 @@ class HistoricalPrice(Base):
     __table_args__ = (
         UniqueConstraint("option_strike_id", "ticker_datetime", name="unique_strike_dt"),
     )
+
+    def __repr__(self):
+        return f"[{self.id}] {self.option_strike.name} {self.option_strike.expiry} " \
+               f"{self.ticker_datetime} {self.close}"
 
 
 class Holiday(Base):

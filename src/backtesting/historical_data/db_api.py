@@ -116,18 +116,20 @@ class DBApiPostgres:
     @staticmethod
     def fetch_historical_data(
             session: Session, index: str, strike: int, option_type: str, expiry: datetime.date
-    ):
-        return session.query(HistoricalPrice).join(OptionStrike).join(StockIndex).filter(
+    ) -> List[HistoricalPrice]:
+        result = session.query(HistoricalPrice).join(OptionStrike).join(StockIndex).filter(
             StockIndex.name == index,
             OptionStrike.strike == strike,
             OptionStrike.option_type == option_type,
             OptionStrike.expiry == expiry
         ).order_by(HistoricalPrice.ticker_datetime)
+        # Due to lazy loading, database base operation will not be performed until we request for it
+        return list(result)
 
     @staticmethod
     def fetch_option_strike(
         session: Session, index: str, strike: int, option_type: str, expiry: datetime.date
-    ):
+    ) -> OptionStrike:
         return session.query(OptionStrike).join(StockIndex).filter(
             StockIndex.name == index,
             OptionStrike.strike == strike,
@@ -246,28 +248,6 @@ class DBApiSqLite:
 
 if __name__ == "__main__":
     from src.backtesting.historical_data.database import SessionLocal
-    db_file = "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/" \
-              "database.sqlite"
-    with DBApiSqLite(Path(db_file)) as db_api:
-        series = db_api.fetch_series_data(
-            index="NIFTY",
-            strike=17400,
-            option_type="CE",
-            expiry=datetime.date(day=3, month=2, year=2022)
-        )
-
-    with DBApiSqLite(Path(db_file)) as db_api:
-        res = db_api.fetch_historical_data(
-            index="NIFTY",
-            strike=17400,
-            option_type="CE",
-            expiry=datetime.date(day=3, month=2, year=2022)
-        )
-
-    with DBApiSqLite(Path(db_file)) as db_api:
-        holiday = db_api.is_holiday(dt=datetime.date(day=12, month=1, year=2022))
-        print(holiday)
-
     with SessionLocal() as session:
         data = DBApiPostgres.fetch_historical_data(
             session=session,
@@ -276,5 +256,29 @@ if __name__ == "__main__":
             option_type="CE",
             expiry=datetime.date(day=27, month=10, year=2016)
         )
+        print(type(data))       # <class 'sqlalchemy.orm.query.Query'>
+        print(type(data[0]))    # <class 'src.backtesting.historical_data.models.HistoricalPrice'>
         for x in data:
             print(x)
+
+    # db_file = "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/" \
+    #           "database.sqlite"
+    # with DBApiSqLite(Path(db_file)) as db_api:
+    #     series = db_api.fetch_series_data(
+    #         index="NIFTY",
+    #         strike=17400,
+    #         option_type="CE",
+    #         expiry=datetime.date(day=3, month=2, year=2022)
+    #     )
+    #
+    # with DBApiSqLite(Path(db_file)) as db_api:
+    #     res = db_api.fetch_historical_data(
+    #         index="NIFTY",
+    #         strike=17400,
+    #         option_type="CE",
+    #         expiry=datetime.date(day=3, month=2, year=2022)
+    #     )
+    #
+    # with DBApiSqLite(Path(db_file)) as db_api:
+    #     holiday = db_api.is_holiday(dt=datetime.date(day=12, month=1, year=2022))
+    #     print(holiday)
