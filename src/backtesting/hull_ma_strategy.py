@@ -434,6 +434,7 @@ class HullMABackTesting(BaseBackTesting):
                 self._ce_strategy_analysis.loss += ce_profit_loss
                 self._ce_strategy_analysis.loss_trades += 1
             self._ce_strategy_analysis.consecutive_win_loss.compute(ce_profit_loss)
+            self._ce_strategy_analysis.compute_equity_curve(ce_profit_loss)
         else:
             if soft_exit:
                 ce_exit_type = ExitType.NO_TRADE
@@ -486,6 +487,7 @@ class HullMABackTesting(BaseBackTesting):
                 self._pe_strategy_analysis.loss += pe_profit_loss
                 self._pe_strategy_analysis.loss_trades += 1
             self._pe_strategy_analysis.consecutive_win_loss.compute(pe_profit_loss)
+            self._pe_strategy_analysis.compute_equity_curve(pe_profit_loss)
         else:
             if soft_exit:
                 pe_exit_type = ExitType.NO_TRADE
@@ -570,6 +572,8 @@ class HullMABackTesting(BaseBackTesting):
         """ Execute backtesting """
         start_time = time.time()
         super(HullMABackTesting, self).execute()
+        self._ce_strategy_analysis.initial_capital = self.config.get("initial_capital_ce")
+        self._pe_strategy_analysis.initial_capital = self.config.get("initial_capital_pe")
         self.process_input()
         self.save_df_to_excel(self._output_df, self.config["output_excel_file_path"])
         self._logger.info(f"Output excel is saved to {self.config['output_excel_file_path']}")
@@ -577,10 +581,8 @@ class HullMABackTesting(BaseBackTesting):
         self._logger.info(f"Execution time: {execution_time} seconds")
         # Print strategy analysis
         print("CE Buy Analysis")
-        self._ce_strategy_analysis.initial_capital = self.config.get("initial_capital_ce")
         self._ce_strategy_analysis.print_analysis()
         print("PE Sell Analysis")
-        self._pe_strategy_analysis.initial_capital = self.config.get("initial_capital_pe")
         self._pe_strategy_analysis.print_analysis()
 
     @property

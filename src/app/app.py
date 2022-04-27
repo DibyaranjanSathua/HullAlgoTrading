@@ -308,6 +308,12 @@ class AppLayout:
                 html.Td(strategy_analysis.consecutive_win_loss.consecutive_loss)
             ]
         ))
+        rows.append(html.Tr(
+            [
+                html.Td("Maximun Drawdown"),
+                html.Td(strategy_analysis.drawdown)
+            ]
+        ))
         table_body = html.Tbody(rows)
         return dbc.Table(
             [

@@ -3,8 +3,10 @@ File:           strategy_analysis.py
 Author:         Dibyaranjan Sathua
 Created on:     20/04/22, 9:36 pm
 """
-from typing import Optional
-from dataclasses import dataclass
+from typing import Optional, List
+from dataclasses import dataclass, field
+
+import numpy as np
 
 
 @dataclass()
@@ -47,6 +49,15 @@ class StrategyAnalysis:
     loss_trades: int = 0
     consecutive_win_loss: Optional[ConsecutiveWinLoss] = None
     initial_capital: Optional[float] = None
+    equity_curve: List[float] = field(default_factory=list)
+
+    def compute_equity_curve(self, profit_loss: float):
+        """ Compute the equity value after each trade """
+        if self.initial_capital is not None:
+            if self.equity_curve:
+                self.equity_curve.append(self.equity_curve[-1] + profit_loss)
+            else:
+                self.equity_curve.append(self.initial_capital + profit_loss)
 
     @property
     def profit_loss(self) -> float:
@@ -108,6 +119,18 @@ class StrategyAnalysis:
             )
         return 0
 
+    @property
+    def drawdown(self) -> Optional[float]:
+        if self.initial_capital is None:
+            return None
+        equity_curve = np.array(self.equity_curve)
+        # End of period
+        trough = np.argmax(np.maximum.accumulate(equity_curve) - equity_curve)
+        # Start of period
+        peak = np.argmax(equity_curve[:trough])
+        max_dd = 100 * (equity_curve[trough] - equity_curve[peak]) / equity_curve[peak]
+        return round(max_dd, 2)
+
     def print_analysis(self):
         print(f"Initial Capital: {self.initial_capital}")
         print(f"Lot Size: {self.lot_size}")
@@ -126,3 +149,4 @@ class StrategyAnalysis:
         print(f"Profit Potential: {self.profit_potential}")
         print(f"Consecutive Wins: {self.consecutive_win_loss.consecutive_win}")
         print(f"Consecutive Losses: {self.consecutive_win_loss.consecutive_loss}")
+        print(f"Maximum Drawdown: {self.drawdown}")
