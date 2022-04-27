@@ -135,7 +135,7 @@ class HullMABackTesting(BaseBackTesting):
         )
         if price_data is None:
             raise BackTestingError(f"price data is missing for {dt}")
-        return float(price_data.close)
+        return price_data.close
 
     def get_ce_entry_instrument(
             self,
@@ -267,13 +267,11 @@ class HullMABackTesting(BaseBackTesting):
             instrument_sl_price = round((100 + stop_loss) * instrument.price / 100, 2)
         for data in price_data:
             # Long trade. If price goes below instrument_sl_price, SL hit
-            if instrument.option_type == "CE" and float(data["close"]) < instrument_sl_price:
-                return True, float(data["close"]), \
-                       datetime.datetime.strptime(data["dt"], "%Y-%m-%d %H:%M:%S.%f")
+            if instrument.option_type == "CE" and data.close < instrument_sl_price:
+                return True, data.close, data.ticker_datetime
             # Short trade. If price goes above instrument_sl_price, SL hit
-            elif instrument.option_type == "PE" and float(data["close"]) > instrument_sl_price:
-                return True, float(data["close"]), \
-                       datetime.datetime.strptime(data["dt"], "%Y-%m-%d %H:%M:%S.%f")
+            elif instrument.option_type == "PE" and data.close > instrument_sl_price:
+                return True, data.close, data.ticker_datetime
         return False, None, None
 
     def entry(
