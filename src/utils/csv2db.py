@@ -42,14 +42,14 @@ class CSV2DB:
                     print(f"Processing {dir_path}")
                     for file_path in dir_path.iterdir():
                         if file_path.is_file() and file_path.suffix == ".csv":
-                            self.import_csv(session, file_path)
+                            self.import_csv(session, file_path, bulk_update=True)
 
     def process_csv_file(self, csv_filepath: Path):
         """ Process a csv file and import data to database """
         with SessionLocal() as session:
-            self.import_csv(session, csv_filepath)
+            self.import_csv(session, csv_filepath, bulk_update=False)
 
-    def import_csv(self, session: Session, csv_filepath: Path):
+    def import_csv(self, session: Session, csv_filepath: Path, bulk_update: bool):
         """ Process a csv file and upload """
         print(f"Processing {csv_filepath}")
         filename = csv_filepath.stem
@@ -70,11 +70,14 @@ class CSV2DB:
         )
         # Add the csv file data to db
         self.read_csv(
-            session=session, csv_filepath=csv_filepath, option_strike=option_strike
+            session=session,
+            csv_filepath=csv_filepath,
+            option_strike=option_strike,
+            bulk_update=bulk_update
         )
 
     @staticmethod
-    def read_csv(session: Session, csv_filepath: Path, option_strike):
+    def read_csv(session: Session, csv_filepath: Path, option_strike, bulk_update: bool):
         """ Process csv file and add it to database """
         items = []
         with open(csv_filepath, mode="r", newline="") as csv_file:
@@ -85,7 +88,7 @@ class CSV2DB:
                 ticker_date = datetime.datetime.strptime(row["Date"], "%Y%m%d").date()
                 ticker_time = datetime.datetime.strptime(row["Time"], "%H:%M:%S").time()
                 ticket_datetime = datetime.datetime.combine(ticker_date, ticker_time)
-                items.append({
+                row_dict = {
                     "open": float(row["Open"]),
                     "high": float(row["High"]),
                     "low": float(row["Low"]),
@@ -94,9 +97,14 @@ class CSV2DB:
                     "oi": int(row["OI"]),
                     "ticker_datetime": ticket_datetime,
                     "option_strike_id": option_strike.id
-                })
-                DBApiPostgres.create_historical_price(session, **items[-1])
-        # DBApiPostgres.create_bulk_historical_price(session=session, items=items)
+                }
+
+                if bulk_update:
+                    items.append(row_dict)
+                else:
+                    DBApiPostgres.create_historical_price(session, **row_dict)
+        if bulk_update:
+            DBApiPostgres.create_bulk_historical_price(session=session, items=items)
 
     def parse_filename(self, session: Session, filename: str) -> Instrument:
         """ Parse filename to get the instrument """
