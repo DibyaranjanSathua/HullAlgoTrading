@@ -128,7 +128,8 @@ class StrategyAnalysis:
         trough = np.argmax(np.maximum.accumulate(equity_curve) - equity_curve)
         # Start of period
         peak = np.argmax(equity_curve[:trough])
-        max_dd = 100 * (equity_curve[trough] - equity_curve[peak]) / equity_curve[peak]
+        # max_dd = 100 * (equity_curve[trough] - equity_curve[peak]) / equity_curve[peak]
+        max_dd = equity_curve[peak] - equity_curve[trough]
         return round(max_dd, 2)
 
     def print_analysis(self):
