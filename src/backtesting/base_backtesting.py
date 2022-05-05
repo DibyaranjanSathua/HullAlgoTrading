@@ -6,6 +6,7 @@ Created on:     16/04/22, 12:17 pm
 from typing import Optional
 from pathlib import Path
 import datetime
+import calendar
 import os
 
 import pandas as pd
@@ -98,12 +99,21 @@ class BaseBackTesting:
     @staticmethod
     def get_current_month_expiry(signal_date: datetime.date) -> datetime.date:
         """ Return current month last thursday date """
-        # Next month 1st
-        year = signal_date.year + (signal_date.month // 12)
-        month = signal_date.month % 12 + 1
-        next_month_first = datetime.date(year=year, month=month, day=1)
-        offset = (next_month_first.weekday() - 3) % 7
-        expiry = next_month_first - datetime.timedelta(days=offset)
+        year = signal_date.year
+        month = signal_date.month
+        month_calendar = calendar.monthcalendar(year=year, month=month)
+        thursday = max(month_calendar[-1][calendar.THURSDAY], month_calendar[-2][calendar.THURSDAY])
+        expiry = datetime.date(year=year, month=month, day=thursday)
+        if signal_date > expiry:
+            # Get the next month expiry
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+            month_calendar = calendar.monthcalendar(year=year, month=month)
+            thursday = max(month_calendar[-1][calendar.THURSDAY],
+                           month_calendar[-2][calendar.THURSDAY])
+            expiry = datetime.date(year=year, month=month, day=thursday)
         return expiry
 
     def get_expiry(self, signal_date: datetime.date) -> datetime.date:
