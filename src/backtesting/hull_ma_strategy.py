@@ -73,7 +73,7 @@ class HullMABackTesting(BaseBackTesting):
                 )
                 self._entry_datetime = self.get_market_hour_datetime(row["Date/Time"])
                 self._entry_strike = self.get_entry_strike(row["Price"])
-                self._active_instrument_expiry = self.get_current_week_expiry(
+                self._active_instrument_expiry = self.get_expiry(
                     self._entry_datetime.date()
                 )
                 lot_size = int(row["Contracts"])

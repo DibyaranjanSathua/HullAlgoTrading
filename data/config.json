@@ -3,6 +3,7 @@
   "quantity_per_lot": 50,
   "initial_capital_ce": 100000,
   "initial_capital_pe": 200000,
+  "monthly_expiry": true,
   "close_position_day_end": false,
   "SL_check": null,
   "ce_premium_check": {
@@ -29,7 +30,7 @@
       "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
     }
   ],
-  "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/NIFTY_MovingAvg_RSI.xlsx",
+  "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/InputSignal.xlsx",
   "output_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/output.xlsx",
   "db_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/database.sqlite"
 }

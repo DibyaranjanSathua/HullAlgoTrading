@@ -87,11 +87,30 @@ class BaseBackTesting:
         """ Save the dataframe to excel """
         df.to_excel(filepath, header=True, index=False)
 
-    def get_current_week_expiry(self, signal_date: datetime.date) -> datetime.date:
+    @staticmethod
+    def get_current_week_expiry(signal_date: datetime.date) -> datetime.date:
         """ Return the current week expiry date """
         # Monday is 0 and Sunday is 6. Thursday is 3
         offset = (3 - signal_date.weekday()) % 7
         expiry = signal_date + datetime.timedelta(days=offset)
+        return expiry
+
+    @staticmethod
+    def get_current_month_expiry(signal_date: datetime.date) -> datetime.date:
+        """ Return current month last thursday date """
+        # Next month 1st
+        year = signal_date.year + (signal_date.month // 12)
+        month = signal_date.month % 12 + 1
+        next_month_first = datetime.date(year=year, month=month, day=1)
+        offset = (next_month_first.weekday() - 3) % 7
+        expiry = next_month_first - datetime.timedelta(days=offset)
+        return expiry
+
+    def get_expiry(self, signal_date: datetime.date) -> datetime.date:
+        """ Return either weekly or monthly expiry depends on the setting in config file """
+        monthly_expiry = self.config.get("monthly_expiry")
+        expiry = self.get_current_month_expiry(signal_date) if monthly_expiry \
+            else self.get_current_week_expiry(signal_date)
         return self.get_valid_expiry(expiry=expiry)
 
     def get_valid_expiry(self, expiry: datetime.date) -> datetime.date:
