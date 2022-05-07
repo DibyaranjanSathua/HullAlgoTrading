@@ -9,12 +9,11 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-
 from dotenv import load_dotenv
 
+from src import BASE_DIR
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parents[3]
+
 # Load env vars from .env
 dotenv_path = BASE_DIR / 'env' / '.env'
 load_dotenv(dotenv_path=dotenv_path)

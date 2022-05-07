@@ -19,11 +19,10 @@ from fyers_api import accessToken
 from fyers_api.Websocket import ws
 from dotenv import load_dotenv
 
+from src import BASE_DIR
 from src.fyers.exception import FyersApiError
 
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parents[2]
 # Load env vars from .env
 dotenv_path = BASE_DIR / 'env' / '.env'
 load_dotenv(dotenv_path=dotenv_path)
