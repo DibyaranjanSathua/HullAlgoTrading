@@ -3,12 +3,11 @@ File:           base_strategy.py
 Author:         Dibyaranjan Sathua
 Created on:     15/04/22, 6:51 pm
 """
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from abc import ABC, abstractmethod
 import datetime
 
 from src.strategies.enums import ActionType
-from src.utils.instrument import Instrument
 
 
 class BaseStrategy(ABC):
@@ -42,3 +41,8 @@ class BaseStrategy(ABC):
     @staticmethod
     def is_entry_signal(signal: Dict[str, Any]):
         return signal["action"] == ActionType.Entry.value
+
+    @staticmethod
+    def trading_session_ends(now: datetime.datetime):
+        """ Return true if the time is greater than 3:36 PM else false """
+        return now.time().hour == 15 and now.time().minute > 35

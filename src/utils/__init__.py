@@ -19,3 +19,9 @@ def istnow():
     utcnow = pytz.utc.localize(datetime.datetime.utcnow())
     ist_tz = pytz.timezone("Asia/Kolkata")
     return utcnow.astimezone(ist_tz)
+
+
+def make_ist_aware(dt: datetime.datetime):
+    """ Add IST timezone to the offset native datetime """
+    ist_tz = pytz.timezone("Asia/Kolkata")
+    return ist_tz.localize(dt)

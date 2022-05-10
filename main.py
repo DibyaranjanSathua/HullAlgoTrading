@@ -5,7 +5,7 @@ Created on:     16/04/22, 12:38 pm
 """
 import argparse
 from src.backtesting.hull_ma_strategy import HullMABackTesting
-from src.strategies.hull_ma_strategy import HullMATradingStrategy
+from src.strategies.rule_engine1 import RuleEngine1
 
 
 def main():
@@ -16,7 +16,7 @@ def main():
     # config_file_path: str = "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/" \
     #                         "data/config.json"
     if args.trading:
-        HullMATradingStrategy().execute()
+        RuleEngine1().execute()
     else:
         HullMABackTesting(config_file_path=args.config).execute()
 

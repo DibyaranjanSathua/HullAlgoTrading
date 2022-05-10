@@ -7,19 +7,18 @@ from typing import Optional
 from dataclasses import dataclass
 import datetime
 
-from src.utils.enums import OptionType
-
 
 @dataclass()
 class Instrument:
     symbol: str
     symbol_code: str
+    action: str                 # BUY or SELL
     lot_size: Optional[int]
     expiry: Optional[datetime.date]
     exchange_code: Optional[int]
     exchange: Optional[str]
     code: Optional[int]         # Instrument code
-    option_type: Optional[OptionType]
+    option_type: Optional[str]
     strike: Optional[int]
     entry: Optional[datetime.datetime]
     price: Optional[float]
