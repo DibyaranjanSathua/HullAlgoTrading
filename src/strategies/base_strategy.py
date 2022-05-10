@@ -3,9 +3,11 @@ File:           base_strategy.py
 Author:         Dibyaranjan Sathua
 Created on:     15/04/22, 6:51 pm
 """
-from typing import Optional
+from typing import Optional, Dict, Any
 from abc import ABC, abstractmethod
+import datetime
 
+from src.strategies.enums import ActionType
 from src.utils.instrument import Instrument
 
 
@@ -17,13 +19,26 @@ class BaseStrategy(ABC):
         pass
 
     @abstractmethod
-    def entry(self, instrument: Instrument) -> None:
+    def entry(self) -> None:
         pass
 
     @abstractmethod
-    def exit(self, lot_size: Optional[int] = None) -> None:
+    def exit(self) -> None:
         pass
 
-    @abstractmethod
     def process_live_tick(self) -> None:
         pass
+
+    def execute(self) -> None:
+        pass
+
+    @staticmethod
+    def market_hour(dt: datetime.datetime) -> bool:
+        """ Return True if dt is in market hour 9:15:01 to 3:29:59. dt is IST timezone """
+        start_time = datetime.time(hour=9, minute=15)
+        end_time = datetime.time(hour=15, minute=30)
+        return start_time < dt.time() < end_time
+
+    @staticmethod
+    def is_entry_signal(signal: Dict[str, Any]):
+        return signal["action"] == ActionType.Entry.value

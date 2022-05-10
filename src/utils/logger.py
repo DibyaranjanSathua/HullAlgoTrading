@@ -6,6 +6,8 @@ Created on:     16/04/22, 5:42 pm
 from typing import Optional, Dict
 import logging
 
+from src import LOG_DIR
+
 
 class LogFacade:
     """ Log module """
@@ -30,7 +32,7 @@ class LogFacade:
 
     def add_file_handler(self):
         """ Add a file handler to logger """
-        handler = logging.FileHandler(filename=f"{self._name}.log", mode="w")
+        handler = logging.FileHandler(filename=LOG_DIR / f"{self._name}.log", mode="w")
         handler.setLevel(level=self._level)
         handler.setFormatter(logging.Formatter(LogFacade.FORMAT))
         self._logger.addHandler(handler)
