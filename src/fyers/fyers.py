@@ -351,7 +351,6 @@ class FyersMarketData(threading.Thread):
     def add_market_data(data: List):
         data = data.pop()
         symbol = data["symbol"]
-        print(f"Adding market data for {symbol}")
         FyersMarketData.__market_data[symbol] = MarketData.from_dict(data)
 
 
