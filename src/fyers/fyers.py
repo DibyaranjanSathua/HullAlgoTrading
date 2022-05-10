@@ -198,12 +198,19 @@ class FyersApi:
         self.setup_fyers_market_data()
         self.setup_fyers_symbol_parser()
 
-    def get_market_quotes(self, symbol: str):
+    def get_market_quotes(self, symbol: str) -> Dict[str, Any]:
         """ Return the market quotes of the input symbol """
         data = {"symbols": symbol}
         response = self._fyers.quotes(data)
         assert response["s"] == FyersApi.OK, f"Error getting market quotes for {symbol}"
         return response["d"].pop()["v"]
+
+    def get_market_depth(self, symbol: str) -> Dict[str, Any]:
+        """ Return the complete market data of the symbol """
+        data = {"symbol": symbol, "ohlcv_flag": "1"}
+        response = self._fyers.depth(data)
+        assert response["s"] == FyersApi.OK, f"Error getting market depth for {symbol}"
+        return response["d"][symbol]
 
     @staticmethod
     def _get_state_string() -> str:

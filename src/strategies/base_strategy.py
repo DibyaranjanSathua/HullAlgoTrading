@@ -33,7 +33,7 @@ class BaseStrategy(ABC):
         pass
 
     @staticmethod
-    def market_hour(dt: datetime.datetime) -> bool:
+    def is_market_hour(dt: datetime.datetime) -> bool:
         """ Return True if dt is in market hour 9:15:01 to 3:29:59. dt is IST timezone """
         start_time = datetime.time(hour=9, minute=15)
         end_time = datetime.time(hour=15, minute=30)

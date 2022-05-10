@@ -56,11 +56,17 @@ class HullMATradingStrategy(BaseStrategy):
         if self._entry_instrument is None:
             print(f"No open position. Ignoring this signal")
             return None
-        market_quotes = self._fyers_api.get_market_quotes(self._entry_instrument.symbol_code)
+        market_depth = self._fyers_api.get_market_depth(self._entry_instrument.symbol_code)
+        lot_size = self._signal["contract_size"]
+        self._entry_instrument.lot_size -= lot_size
         logger.info(
-            f"Exit taken for symbol {self._entry_instrument.symbol} at "
-            f"{self._signal['timestamp']} at price {market_quotes['prev_close_price']}"
+            f"Exit {self._signal['action']} lot size {lot_size} for symbol "
+            f"{self._entry_instrument.symbol} at {self._signal['timestamp']} at price "
+            f"{market_depth['ltp']}"
         )
+        if self._entry_instrument.lot_size == 0:
+            self._entry_instrument = None
+            self.entry_instrument_file.unlink(missing_ok=True)
 
     def execute(self) -> None:
         """ main function which will run forever and execute the strategy in an infinite loop """
@@ -68,7 +74,6 @@ class HullMATradingStrategy(BaseStrategy):
         self.setup()
         print(f"Starting execution of strategy {HullMATradingStrategy.STRATEGY_CODE}")
         super(HullMATradingStrategy, self).execute()
-        import time
         while True:
             self._signal = self.get_tradingview_signal()
             now = istnow()
@@ -76,7 +81,7 @@ class HullMATradingStrategy(BaseStrategy):
                 # SL logic
                 pass
             else:
-                if self.market_hour(now):
+                if self.is_market_hour(now):
                     if self.is_entry_signal(self._signal):
                         self.entry()
                     else:
@@ -92,7 +97,6 @@ class HullMATradingStrategy(BaseStrategy):
                     #         print(f"Entry already taken")
                     #
                     # print(self._entry_instrument)
-            time.sleep(5)
 
     def get_tradingview_signal(self) -> Optional[Dict[str, Any]]:
         """ Check for any trading view signal """
@@ -100,7 +104,7 @@ class HullMATradingStrategy(BaseStrategy):
         message: str = self._redis.get_message()
         signal: Optional[Dict[str, Any]] = None
         if message:
-            print(f"Signal received from TradingView: {message}")
+            logger.info(f"Signal received from TradingView: {message}")
             signal = json.loads(message)
             # Signal datetime from tradingview will be in UTC
             signal["timestamp"] = datetime.datetime.fromisoformat(
@@ -120,7 +124,7 @@ class HullMATradingStrategy(BaseStrategy):
             expiry=expiry,
             option_type=self._signal["option_type"]
         )
-        market_quotes = self._fyers_api.get_market_quotes(symbol_details["symbol_code"])
+        market_depth = self._fyers_api.get_market_depth(symbol_details["symbol_code"])
         self._entry_instrument = Instrument(
             symbol=symbol_details["symbol"],
             symbol_code=symbol_details["symbol_code"],
@@ -132,7 +136,7 @@ class HullMATradingStrategy(BaseStrategy):
             option_type=self._signal["option_type"],
             strike=strike_price,
             entry=self._signal["timestamp"],
-            price=market_quotes["prev_close_price"]
+            price=market_depth["ltp"]
         )
         self._write_entry_instrument()
 
