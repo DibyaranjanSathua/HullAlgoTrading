@@ -20,7 +20,7 @@ from src.utils.logger import LogFacade
 from src import DATA_DIR
 
 
-logger: LogFacade = LogFacade.get_logger("rule_engine1.log")
+logger: LogFacade = LogFacade.get_logger("rule_engine1")
 
 
 class RuleEngine1(BaseStrategy):

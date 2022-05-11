@@ -9,7 +9,7 @@ from src.strategies.rule_engine1 import RuleEngine1
 from src.utils.logger import LogFacade
 
 
-logger = LogFacade.get_logger("main.log")
+logger = LogFacade.get_logger("main")
 
 
 def main():

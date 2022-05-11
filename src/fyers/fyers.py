@@ -31,7 +31,7 @@ from src.utils.logger import LogFacade
 # Load env vars from .env
 dotenv_path = BASE_DIR / 'env' / '.env'
 load_dotenv(dotenv_path=dotenv_path)
-logger = LogFacade.get_logger("fyers_api.log")
+logger = LogFacade.get_logger("fyers_api")
 
 
 class FyersApi:
