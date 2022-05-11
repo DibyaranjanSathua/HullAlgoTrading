@@ -126,7 +126,7 @@ class RuleEngine1(BaseStrategy):
         )
         self._fyers_api.place_cnc_market_order(
             symbol=self._entry_instrument.symbol_code,
-            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
+            qty=lot_size * RuleEngine1.QUANTITY,
             action=action
         )
         if self._entry_instrument.lot_size:
