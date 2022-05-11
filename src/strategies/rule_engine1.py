@@ -275,13 +275,16 @@ class RuleEngine1(BaseStrategy):
                 f"No live market data for symbol {self._entry_instrument.symbol} "
                 f"for checking SL"
             )
+            # As we the live market data for this symbol and it is not available, subscribe for
+            # the symbol so that we will start getting the live market data.
+            self._subscribe_live_market_data()
         else:
             ce_sl_hit = self._entry_instrument.option_type == "CE" and \
                         entry_instrument_ltp < self._entry_instrument_sl
             pe_sl_hit = self._entry_instrument.option_type == "PE" and \
                         entry_instrument_ltp > self._entry_instrument_sl
             if ce_sl_hit or pe_sl_hit:
-                    return True
+                return True
         return False
 
     def _calculate_entry_instrument_sl(self):
