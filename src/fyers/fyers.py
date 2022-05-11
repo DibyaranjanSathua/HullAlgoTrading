@@ -237,7 +237,7 @@ class FyersApi:
             "qty": qty,
             "type": OrderType.MARKET_ORDER.value,
             "side": action.value,
-            "productType": ProductType.INTRADAY.value,
+            "productType": ProductType.CNC.value,
             "limitPrice": 0,
             "stopPrice": 0,
             "validity": OrderValidity.DAY.value,
