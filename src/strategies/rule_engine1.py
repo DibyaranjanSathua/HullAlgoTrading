@@ -28,6 +28,7 @@ class RuleEngine1(BaseStrategy):
     STRATEGY_CODE: str = "strategy1"
     CE_PREMIUM: float = 8000
     SL_PERCENT: float = 50
+    QUANTITY: int = 50
 
     def __init__(self):
         super(RuleEngine1, self).__init__()
@@ -81,7 +82,7 @@ class RuleEngine1(BaseStrategy):
         )
         self._fyers_api.place_cnc_market_order(
             symbol=self._entry_instrument.symbol_code,
-            qty=self._entry_instrument.lot_size,
+            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
             action=action
         )
         self._subscribe_live_market_data()
@@ -125,7 +126,7 @@ class RuleEngine1(BaseStrategy):
         )
         self._fyers_api.place_cnc_market_order(
             symbol=self._entry_instrument.symbol_code,
-            qty=self._entry_instrument.lot_size,
+            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
             action=action
         )
         if self._entry_instrument.lot_size:
@@ -260,7 +261,7 @@ class RuleEngine1(BaseStrategy):
         """ CE premium check. If premium is more than 8000, don't take the trade """
         # 8000 premium check is per lot. Nifty 1 lot is 50 qty
         if self._entry_instrument.option_type == "CE" and \
-                self._entry_instrument.price * 50 > RuleEngine1.CE_PREMIUM:
+                self._entry_instrument.price * RuleEngine1.QUANTITY > RuleEngine1.CE_PREMIUM:
             return False
         return True
 
