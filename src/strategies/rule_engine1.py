@@ -80,11 +80,11 @@ class RuleEngine1(BaseStrategy):
             f"Placing {self._entry_instrument.action.upper()} market order for "
             f"{self._entry_instrument.symbol} with lot size {self._entry_instrument.lot_size}"
         )
-        # self._fyers_api.place_cnc_market_order(
-        #     symbol=self._entry_instrument.symbol_code,
-        #     qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
-        #     action=action
-        # )
+        self._fyers_api.place_cnc_market_order(
+            symbol=self._entry_instrument.symbol_code,
+            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
+            action=action
+        )
         self._subscribe_live_market_data()
         # Save the entry instrument to a file after placing the order
         self._write_entry_instrument()
@@ -124,11 +124,11 @@ class RuleEngine1(BaseStrategy):
             f"Placing {action.value} market order for {self._entry_instrument.symbol} with lot "
             f"size {self._entry_instrument.lot_size}"
         )
-        # self._fyers_api.place_cnc_market_order(
-        #     symbol=self._entry_instrument.symbol_code,
-        #     qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
-        #     action=action
-        # )
+        self._fyers_api.place_cnc_market_order(
+            symbol=self._entry_instrument.symbol_code,
+            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
+            action=action
+        )
         if self._entry_instrument.lot_size:
             # Update the entry_instrument in the file
             self._write_entry_instrument()
@@ -272,10 +272,10 @@ class RuleEngine1(BaseStrategy):
             self._entry_instrument.symbol_code
         )
         if entry_instrument_ltp is None:
-            logger.warning(
-                f"No live market data for symbol {self._entry_instrument.symbol} "
-                f"for checking SL"
-            )
+            # logger.warning(
+            #     f"No live market data for symbol {self._entry_instrument.symbol} "
+            #     f"for checking SL"
+            # )
             # As we the live market data for this symbol and it is not available, subscribe for
             # the symbol so that we will start getting the live market data.
             self._subscribe_live_market_data()
