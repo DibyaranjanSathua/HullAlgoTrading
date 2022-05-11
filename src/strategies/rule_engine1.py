@@ -77,14 +77,14 @@ class RuleEngine1(BaseStrategy):
         action = OrderAction.BUY if self._entry_instrument.action.upper() == "BUY" \
             else OrderAction.SELL
         logger.info(
-            f"Placing {action.value} market order for {self._entry_instrument.symbol} with lot "
-            f"size {self._entry_instrument.lot_size}"
+            f"Placing {self._entry_instrument.action.upper()} market order for "
+            f"{self._entry_instrument.symbol} with lot size {self._entry_instrument.lot_size}"
         )
-        self._fyers_api.place_cnc_market_order(
-            symbol=self._entry_instrument.symbol_code,
-            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
-            action=action
-        )
+        # self._fyers_api.place_cnc_market_order(
+        #     symbol=self._entry_instrument.symbol_code,
+        #     qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
+        #     action=action
+        # )
         self._subscribe_live_market_data()
         # Save the entry instrument to a file after placing the order
         self._write_entry_instrument()
@@ -124,11 +124,11 @@ class RuleEngine1(BaseStrategy):
             f"Placing {action.value} market order for {self._entry_instrument.symbol} with lot "
             f"size {self._entry_instrument.lot_size}"
         )
-        self._fyers_api.place_cnc_market_order(
-            symbol=self._entry_instrument.symbol_code,
-            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
-            action=action
-        )
+        # self._fyers_api.place_cnc_market_order(
+        #     symbol=self._entry_instrument.symbol_code,
+        #     qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
+        #     action=action
+        # )
         if self._entry_instrument.lot_size:
             # Update the entry_instrument in the file
             self._write_entry_instrument()
@@ -301,11 +301,11 @@ class RuleEngine1(BaseStrategy):
                 (100 + RuleEngine1.SL_PERCENT) * self._entry_instrument.price / 100,
                 2
             )
-        logger.info(f"SL price for the entry instrument is {self._entry_instrument_sl}")
+        # logger.info(f"SL price for the entry instrument is {self._entry_instrument_sl}")
 
     def _expiry_time_reach(self, now: datetime.datetime) -> bool:
         """ Return true if the now is expiry day 3:25 pm else false """
-        expiry_date = self.get_current_week_expiry(now)
+        expiry_date = self.get_current_week_expiry(now.date())
         expiry_time = datetime.time(hour=15, minute=25)
         expiry = datetime.datetime.combine(expiry_date, expiry_time)
         # Make the expiry timezone aware
