@@ -317,7 +317,7 @@ class RuleEngine1(BaseStrategy):
     def _subscribe_live_market_data(self):
         """ Subscribe to live market data """
         # Subscribe the instrument for live market data
-        logger.info(f"Subscribing {self._entry_instrument.symbol} to live market data ")
+        # logger.info(f"Subscribing {self._entry_instrument.symbol} to live market data ")
         self._fyers_api.fyers_market_data.subscribe([self._entry_instrument.symbol_code])
 
     def _unsubscribe_live_market_data(self):
