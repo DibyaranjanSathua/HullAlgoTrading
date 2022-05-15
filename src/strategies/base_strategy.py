@@ -14,8 +14,8 @@ class BaseStrategy(ABC):
     """ Abstract class contains common functions that needs to be implemented in the child class """
     STRATEGY_CODE: str = ""
 
-    def __init__(self):
-        pass
+    def __init__(self, dry_run: bool = False):
+        self.dry_run: bool = dry_run
 
     @abstractmethod
     def entry(self) -> None:

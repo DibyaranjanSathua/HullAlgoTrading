@@ -22,3 +22,4 @@ class Instrument:
     strike: Optional[int]
     entry: Optional[datetime.datetime]
     price: Optional[float]
+    order_id: Optional[str]

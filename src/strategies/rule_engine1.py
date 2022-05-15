@@ -30,8 +30,8 @@ class RuleEngine1(BaseStrategy):
     SL_PERCENT: float = 50
     QUANTITY: int = 50
 
-    def __init__(self):
-        super(RuleEngine1, self).__init__()
+    def __init__(self, dry_run: bool = False):
+        super(RuleEngine1, self).__init__(dry_run=dry_run)
         self._redis: RedisBackend = RedisBackend()
         self._fyers_api: FyersApi = FyersApi()
         self._entry_instrument: Optional[Instrument] = None
@@ -60,7 +60,7 @@ class RuleEngine1(BaseStrategy):
         if self._entry_instrument is not None:
             logger.warning(f"An entry has already been taken. Ignoring this entry signal.")
             return None
-        self._get_entry_instrument()
+        self._entry_instrument = self._get_entry_instrument()
         # Check if per lot CE premium is more than 8000
         if not self._ce_premium_check():
             logger.info(
@@ -80,11 +80,14 @@ class RuleEngine1(BaseStrategy):
             f"Placing {self._entry_instrument.action.upper()} market order for "
             f"{self._entry_instrument.symbol} with lot size {self._entry_instrument.lot_size}"
         )
-        self._fyers_api.place_cnc_market_order(
-            symbol=self._entry_instrument.symbol_code,
-            qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
-            action=action
-        )
+        if self.dry_run:
+            logger.info("Ignoring placing actual BUY order as dry-run mode is used")
+        else:
+            self._entry_instrument.order_id = self._fyers_api.place_cnc_market_order(
+                symbol=self._entry_instrument.symbol_code,
+                qty=self._entry_instrument.lot_size * RuleEngine1.QUANTITY,
+                action=action
+            )
         self._subscribe_live_market_data()
         # Save the entry instrument to a file after placing the order
         self._write_entry_instrument()
@@ -120,15 +123,19 @@ class RuleEngine1(BaseStrategy):
         self._entry_instrument.lot_size -= lot_size
         action = OrderAction.SELL if self._entry_instrument.action.upper() == "BUY" \
             else OrderAction.BUY
+        action_str = "BUY" if action.value == 1 else "SELL"
         logger.info(
-            f"Placing {action.value} market order for {self._entry_instrument.symbol} with lot "
-            f"size {self._entry_instrument.lot_size}"
+            f"Placing {action_str} market order for {self._entry_instrument.symbol} with lot "
+            f"size {lot_size}"
         )
-        self._fyers_api.place_cnc_market_order(
-            symbol=self._entry_instrument.symbol_code,
-            qty=lot_size * RuleEngine1.QUANTITY,
-            action=action
-        )
+        if self.dry_run:
+            logger.info("Ignoring placing actual SELL order as dry-run mode is used")
+        else:
+            self._fyers_api.place_cnc_market_order(
+                symbol=self._entry_instrument.symbol_code,
+                qty=lot_size * RuleEngine1.QUANTITY,
+                action=action
+            )
         if self._entry_instrument.lot_size:
             # Update the entry_instrument in the file
             self._write_entry_instrument()
@@ -178,9 +185,9 @@ class RuleEngine1(BaseStrategy):
         """ Process all the signals in the signal queue """
         logger.info(f"Processing signal queue")
         while self._signal_queue:
-            signal = self._signal_queue.popleft()
-            logger.info(f"Signal from signal queue: {signal}")
-            if self.is_entry_signal(signal):
+            self._signal = self._signal_queue.popleft()
+            logger.info(f"Signal from signal queue: {self._signal}")
+            if self.is_entry_signal(self._signal):
                 self.entry()
             else:
                 self.exit()
@@ -202,7 +209,7 @@ class RuleEngine1(BaseStrategy):
             signal["timestamp"] = utc2ist(signal["timestamp"])
         return signal
 
-    def _get_entry_instrument(self):
+    def _get_entry_instrument(self) -> Instrument:
         """ Get the CE entry instrument """
         expiry = self.get_current_week_expiry(self._signal["timestamp"].date())
         exchange, ticker = self._signal["exchange_ticker"].split(":")
@@ -215,7 +222,7 @@ class RuleEngine1(BaseStrategy):
         )
         market_depth = self._fyers_api.get_market_depth(symbol_details["symbol_code"])
         action = "BUY" if self._signal["option_type"] == "CE" else "SELL"
-        self._entry_instrument = Instrument(
+        return Instrument(
             symbol=symbol_details["symbol"],
             symbol_code=symbol_details["symbol_code"],
             action=action,
@@ -227,7 +234,8 @@ class RuleEngine1(BaseStrategy):
             option_type=self._signal["option_type"],
             strike=strike_price,
             entry=self._signal["timestamp"],
-            price=market_depth["ltp"]
+            price=market_depth["ltp"],
+            order_id=None
         )
 
     def get_current_week_expiry(self, dt: datetime.date) -> datetime.date:

@@ -19,12 +19,12 @@ import pandas as pd
 import numpy as np
 from fyers_api import fyersModel
 from fyers_api import accessToken
-from fyers_api.Websocket import ws
 from dotenv import load_dotenv
 
 from src import BASE_DIR, DATA_DIR, LOG_DIR
 from src.fyers.enums import OrderAction, OrderType, OrderValidity, ProductType
 from src.fyers.exception import FyersApiError
+from src.fyers.fyers_websocket import FyersSocket
 from src.utils.logger import LogFacade
 
 
@@ -51,6 +51,7 @@ class FyersApi:
         self._access_token: Optional[str] = None
         self._fyers: Optional[fyersModel.FyersModel] = None
         self._fyers_market_data: Optional[FyersMarketData] = None
+        self._fyers_order_data: Optional[FyersOrderData] = None
         self._fyers_symbol_parser: Optional[FyersSymbolParser] = None
 
     def generate_auth_code(self) -> str:
@@ -189,6 +190,14 @@ class FyersApi:
         )
         self._fyers_market_data.start()
 
+    def setup_fyers_order_data(self):
+        """ Setting up the market data websocket """
+        logger.info(f"Setting up order data websocket.")
+        self._fyers_order_data = FyersOrderData(
+            client_id=self._client_id, access_token=self._access_token,
+        )
+        self._fyers_order_data.start()
+
     def setup_fyers_symbol_parser(self):
         """ Setting up the symbol parser """
         logger.info(f"Setting up fyers symbol parser")
@@ -197,7 +206,7 @@ class FyersApi:
 
     def setup(self):
         """ Setup access token used by other API """
-        logger.info(f"Setting up fuers API")
+        logger.info(f"Setting up fyers API")
         if self.fyers_token_file.is_file():
             self.read_token()
         else:
@@ -207,6 +216,7 @@ class FyersApi:
         )
         self.check()
         self.setup_fyers_market_data()
+        self.setup_fyers_order_data()
         self.setup_fyers_symbol_parser()
 
     def get_market_quotes(self, symbol: str) -> Dict[str, Any]:
@@ -229,7 +239,7 @@ class FyersApi:
         assert response["s"] == FyersApi.OK, f"Error getting market depth for {symbol}"
         return response["d"][symbol]
 
-    def place_cnc_market_order(self, symbol: str, qty: int, action: OrderAction):
+    def place_cnc_market_order(self, symbol: str, qty: int, action: OrderAction) -> str:
         """ Place a CNC market order """
         logger.info(f"Placing CNC {action.value} market order for {symbol} with quantity {qty}")
         data = {
@@ -251,6 +261,7 @@ class FyersApi:
             logger.error(f"Error placing order for {symbol}")
             logger.info(response)
         assert response["s"] == FyersApi.OK, f"Error placing order for {symbol}"
+        return response["id"]
 
     @staticmethod
     def _get_state_string() -> str:
@@ -284,7 +295,10 @@ class FyersApi:
 
 @dataclass()
 class MarketData:
-    """ Dataclass to store market data received from websocket """
+    """
+    Dataclass to store market data received from websocket.
+    Attributes name is same as the data attributes name from websocket.
+    """
     symbol: str
     timestamp: int
     fyCode: int
@@ -330,11 +344,11 @@ class FyersMarketData(threading.Thread):
         # The access token used in web socket should be in the following structure client_
         # id:access_token
         self._access_token: str = f"{client_id}:{access_token}"
-        self._web_socket: Optional[ws.FyersSocket] = None
+        self._web_socket: Optional[FyersSocket] = None
 
     def run(self) -> None:
-        self._web_socket: ws.FyersSocket = ws.FyersSocket(
-            access_token=self._access_token, run_background=False, log_path=LOG_DIR
+        self._web_socket: FyersSocket = FyersSocket(
+            access_token=self._access_token, run_background=True, log_path=LOG_DIR
         )
         self._web_socket.websocket_data = self.add_market_data
         while True:
@@ -390,6 +404,75 @@ class FyersMarketData(threading.Thread):
         data = data.pop()
         symbol = data["symbol"]
         FyersMarketData.__market_data[symbol] = MarketData.from_dict(data)
+
+
+@dataclass()
+class OrderData:
+    """ Websocket order data. Attributes name is same as the data attribute name from websocket. """
+    symbol: str
+    fyToken: str
+    tradedPrice: float
+    orderNumStatus: str
+    message: str
+    offlineOrder: bool
+    slNo: int
+    orderValidity: str
+    dqQtyRem: int
+    discloseQty: int
+    type: int
+    stopPrice: float
+    limitPrice: float
+    filledQty: int
+    remainingQuantity: int
+    qty: int
+    status: int
+    productType: str
+    instrument: str
+    segment: str
+    side: int
+    exchOrdId: str
+    id: str
+    orderDateTime: int
+
+    @property
+    def action(self):
+        return "BUY" if self.side == 1 else "SELL"
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]):
+        return cls(**data)
+
+
+class FyersOrderData(threading.Thread):
+    """ Singleton class to get live order data """
+    __order_data: Dict[str, OrderData] = dict()
+
+    def __init__(self, client_id: str, access_token: str):
+        super(FyersOrderData, self).__init__()
+        # The access token used in web socket should be in the following structure client_
+        # id:access_token
+        self._access_token: str = f"{client_id}:{access_token}"
+        self._web_socket: Optional[FyersSocket] = None
+
+    def run(self) -> None:
+        self._web_socket: FyersSocket = FyersSocket(
+            access_token=self._access_token, run_background=True, log_path=LOG_DIR
+        )
+        self._web_socket.websocket_data = self.add_order_data
+        self._subscribe()
+        self._web_socket.keep_running()
+
+    def _subscribe(self) -> None:
+        """ Subscribe to order data """
+        self._web_socket.subscribe(data_type="orderUpdate")
+
+    @staticmethod
+    def add_order_data(data: List) -> None:
+        print(data)
+        data = data.pop()
+        data = data["d"]
+        order_id = data["id"]
+        FyersOrderData.__order_data[order_id] = OrderData.from_dict(data)
 
 
 class FyersSymbolParser:
@@ -469,18 +552,29 @@ class FyersSymbolParser:
 
 
 if __name__ == "__main__":
-    # api = FyersApi()
-    # api.setup()
-    # print(f"After setup")
-    # import time
-    # time.sleep(5)
-    # print(f"Subscribing to SBIN")
-    # api.fyers_market_data.subscribe(symbol=["NSE:SBIN-EQ"])
-    # print(f"--> After subscribing to SBIN")
-    obj = FyersSymbolParser()
-    obj.setup()
-    print(obj.get_current_week_expiry(datetime.date.today()))
-    output = obj.get_fyers_symbol_name(
-        "NIFTY", 18150, datetime.date(year=2022, month=5, day=12), "CE"
-    )
-    print(output)
+    api = FyersApi()
+    api.setup()
+    print(f"After setup")
+    import time
+    time.sleep(5)
+    print(f"Subscribing to SBIN")
+    api.fyers_market_data.subscribe(symbol=["NSE:SBIN-EQ"])
+    print(f"--> After subscribing to SBIN")
+    time.sleep(10)
+    price = api.fyers_market_data.get_price("NSE:SBIN-EQ")
+    print(f"SBI ltp: {price}")
+    # print(f"--> Unsubscribing NSE:SBIN-EQ")
+    # api.fyers_market_data.unsubscribe(symbol=["NSE:SBIN-EQ"])
+
+    # print(f"--> After subscribing to HDFC")
+    # api.fyers_market_data.subscribe(symbol=["NSE:HDFC-EQ"])
+    # time.sleep(10)
+    # price = api.fyers_market_data.get_price("NSE:HDFC-EQ")
+    # print(f"HDFC ltp: {price}")
+    # obj = FyersSymbolParser()
+    # obj.setup()
+    # print(obj.get_current_week_expiry(datetime.date.today()))
+    # output = obj.get_fyers_symbol_name(
+    #     "NIFTY", 18150, datetime.date(year=2022, month=5, day=12), "CE"
+    # )
+    # print(output)
