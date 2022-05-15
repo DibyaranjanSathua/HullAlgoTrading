@@ -3,6 +3,7 @@ File:           main.py
 Author:         Dibyaranjan Sathua
 Created on:     16/04/22, 12:38 pm
 """
+import sys
 import traceback
 import argparse
 from src.backtesting.hull_ma_strategy import HullMABackTesting
@@ -28,6 +29,7 @@ def main():
             logger.error(f"Exception in RuleEngine1().execute()")
             logger.error(err)
             logger.error(traceback.print_exc())
+        sys.exit(0)
     else:
         HullMABackTesting(config_file_path=args.config).execute()
 
