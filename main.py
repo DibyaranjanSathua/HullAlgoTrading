@@ -19,6 +19,7 @@ def main():
     parser.add_argument("--config", type=str, help="Config file path")
     parser.add_argument("--trading", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--clean-up", action="store_true")
     args = parser.parse_args()
     # config_file_path: str = "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/" \
     #                         "data/config.json"

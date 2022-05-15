@@ -43,6 +43,9 @@ class RuleEngine1(BaseStrategy):
     def setup(self) -> None:
         self._redis.connect()
         self._redis.subscribe(RuleEngine1.STRATEGY_CODE)
+        if self.clean_up_flag:
+            logger.info(f"Clean up flag is set")
+            self.clean_up()
         self._fyers_api.setup()
         # If entry instrument pickle file exist, load the instrument from the file
         self._read_entry_instrument()
@@ -54,6 +57,12 @@ class RuleEngine1(BaseStrategy):
         if self._signal_queue:
             logger.info(f"Saving signal queue to {self.signal_queue_file} file")
             self._write_signal_queue()
+
+    def clean_up(self) -> None:
+        """ Cleaning up the old data """
+        logger.info(f"Cleaning up old saved data")
+        self.signal_queue_file.unlink(missing_ok=True)
+        self.entry_instrument_file.unlink(missing_ok=True)
 
     def entry(self) -> None:
         """ Entry logic """
