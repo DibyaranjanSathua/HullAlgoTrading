@@ -166,7 +166,11 @@ class RuleEngine1(BaseStrategy):
             if self.is_market_hour(now):
                 # First process all the signals in signal queue
                 if self._signal_queue:
+                    # Save the tradingview signal to a temp variable. Process the signal queue first
+                    # then set the tradingview signal
+                    tradingview_signal = self._signal
                     self._process_signal_queue()
+                    self._signal = tradingview_signal
                 if self._signal is None:
                     # If there is any active position
                     if self._entry_instrument is not None:
@@ -293,8 +297,8 @@ class RuleEngine1(BaseStrategy):
             #     f"No live market data for symbol {self._entry_instrument.symbol} "
             #     f"for checking SL"
             # )
-            # As we the live market data for this symbol and it is not available, subscribe for
-            # the symbol so that we will start getting the live market data.
+            # As we subscribe for the live market data for this symbol and it is not available,
+            # subscribe for the symbol so that we will start getting the live market data.
             self._subscribe_live_market_data()
         else:
             ce_sl_hit = self._entry_instrument.option_type == "CE" and \

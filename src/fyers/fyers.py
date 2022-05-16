@@ -468,7 +468,7 @@ class FyersOrderData(threading.Thread):
 
     @staticmethod
     def add_order_data(data: List) -> None:
-        print(data)
+        logger.info(data)
         data = data.pop()
         data = data["d"]
         order_id = data["id"]
