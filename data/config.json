@@ -10,6 +10,10 @@
     "premium": 10000,
     "__comment": "Premium is per lot. So in code I am multiplying it by lot_size."
   },
+  "take_profit_check": {
+    "PE": 20,
+    "CE": 20
+  },
   "missing_data": [
     {
       "strike": 17400,

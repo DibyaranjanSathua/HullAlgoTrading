@@ -19,6 +19,7 @@ class ExitType:
     NO_TRADE: str = "No Trade"
     SOFT_EXIT: str = "Soft Exit"
     INVALID_EXIT: str = "Invalid Exit"
+    TAKE_PROFIT_EXIT: str = "Take Profit Exit"
 
 
 class EntryType:

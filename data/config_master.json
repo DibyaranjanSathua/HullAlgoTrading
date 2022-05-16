@@ -13,6 +13,10 @@
     "PE": 100,
     "CE": 50
   },
+  "take_profit_check": {
+    "PE": 20,
+    "CE": 20
+  },
   "missing_data": [
     {
       "strike": 17400,

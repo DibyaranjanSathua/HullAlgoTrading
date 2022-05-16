@@ -274,6 +274,35 @@ class HullMABackTesting(BaseBackTesting):
                 return True, data.close, data.ticker_datetime
         return False, None, None
 
+    def instrument_take_profit_hit(
+            self, instrument: Instrument, profit_percent: float, exit_datetime: datetime.datetime
+    ) -> Tuple[bool, Optional[float], Optional[datetime.datetime]]:
+        """
+        Check if target profit hit for an instrument.
+        Return a tuple with first element a boolean indicate if target profit hit or not.
+        Second element is the price at which the profit hit. Third element is the time profit hit.
+        profit_percent is in percentage like 20%, 25%.
+        """
+        price_data = self.get_historical_price_range_data(
+            start_datetime=instrument.entry,
+            end_datetime=exit_datetime,
+            option_type=instrument.option_type
+        )
+        if instrument.option_type == "CE":
+            # Its a long trade. So target profit will be above the long price
+            instrument_target_price = round((100 + profit_percent) * instrument.price / 100, 2)
+        else:
+            # Its a short trade. So target profit will be below the short price
+            instrument_target_price = round((100 + profit_percent) * instrument.price / 100, 2)
+        for data in price_data:
+            # Long trade. If price goes above instrument_target_price, target profit hit
+            if instrument.option_type == "CE" and data.close >= instrument_target_price:
+                return True, data.close, data.ticker_datetime
+            # Short trade. If price goes below instrument_target_price, target profit hit
+            elif instrument.option_type == "PE" and data.close <= instrument_target_price:
+                return True, data.close, data.ticker_datetime
+        return False, None, None
+
     def entry(
             self,
             entry_strike: int,
@@ -387,8 +416,11 @@ class HullMABackTesting(BaseBackTesting):
 
         # Variables to track if the instrument is exited due to SL
         ce_instrument_sl_hit = False
+        ce_instrument_profit_hit = False
         pe_instrument_sl_hit = False
+        pe_instrument_profit_hit = False
         sl_check = self.config.get("SL_check")      # Get SL_check from config file
+        take_profit_check = self.config.get("take_profit_check")
         # Get CE exit price
         ce_exit_price = 0
         ce_profit_loss = 0
@@ -401,10 +433,20 @@ class HullMABackTesting(BaseBackTesting):
                     stop_loss=sl_check["CE"],
                     exit_datetime=ce_actual_exit_datetime
                 )
+            if take_profit_check is not None:
+                ce_instrument_profit_hit, ce_exit_price, profit_datetime = self.instrument_take_profit_hit(
+                    instrument=self.CE_ENTRY_INSTRUMENT,
+                    profit_percent=take_profit_check["CE"],
+                    exit_datetime=ce_actual_exit_datetime
+                )
             if ce_instrument_sl_hit:
                 # This is True when SL check is ON and CE SL hits
                 ce_actual_exit_datetime = sl_datetime
                 ce_exit_type = ExitType.SL_EXIT
+            elif ce_instrument_profit_hit:
+                # This is True when take profit check in ON and CE profit hits
+                ce_actual_exit_datetime = profit_datetime
+                ce_exit_type = ExitType.TAKE_PROFIT_EXIT
             else:
                 # For this part the exit type is already calculated in top based on expiry date
                 try:
@@ -453,10 +495,20 @@ class HullMABackTesting(BaseBackTesting):
                     stop_loss=sl_check["PE"],
                     exit_datetime=pe_actual_exit_datetime
                 )
+            if take_profit_check is not None:
+                pe_instrument_profit_hit, pe_exit_price, profit_datetime = self.instrument_take_profit_hit(
+                    instrument=self.PE_ENTRY_INSTRUMENT,
+                    profit_percent=take_profit_check["PE"],
+                    exit_datetime=pe_actual_exit_datetime
+                )
             if pe_instrument_sl_hit:
                 # This is True when SL check is ON and CE SL hits
                 pe_actual_exit_datetime = sl_datetime
                 pe_exit_type = ExitType.SL_EXIT
+            elif pe_instrument_profit_hit:
+                # This is True when take profit check in ON and PE profit hits
+                pe_actual_exit_datetime = profit_datetime
+                pe_exit_type = ExitType.TAKE_PROFIT_EXIT
             else:
                 try:
                     pe_exit_price = self.get_historical_price_by_datetime(
