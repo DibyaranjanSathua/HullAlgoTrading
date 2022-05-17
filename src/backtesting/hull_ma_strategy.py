@@ -428,23 +428,25 @@ class HullMABackTesting(BaseBackTesting):
             # Check if SL exit mode is set in config file. If yes, check minute by minute data
             # to see if SL is getting hit
             if sl_check is not None:
-                ce_instrument_sl_hit, ce_exit_price, sl_datetime = self.instrument_stop_loss_hit(
+                ce_instrument_sl_hit, ce_sl_exit_price, sl_datetime = self.instrument_stop_loss_hit(
                     instrument=self.CE_ENTRY_INSTRUMENT,
                     stop_loss=sl_check["CE"],
                     exit_datetime=ce_actual_exit_datetime
                 )
             if take_profit_check is not None:
-                ce_instrument_profit_hit, ce_exit_price, profit_datetime = self.instrument_take_profit_hit(
+                ce_instrument_profit_hit, ce_profit_exit_price, profit_datetime = self.instrument_take_profit_hit(
                     instrument=self.CE_ENTRY_INSTRUMENT,
                     profit_percent=take_profit_check["CE"],
                     exit_datetime=ce_actual_exit_datetime
                 )
             if ce_instrument_sl_hit:
                 # This is True when SL check is ON and CE SL hits
+                ce_exit_price = ce_sl_exit_price
                 ce_actual_exit_datetime = sl_datetime
                 ce_exit_type = ExitType.SL_EXIT
             elif ce_instrument_profit_hit:
                 # This is True when take profit check in ON and CE profit hits
+                ce_exit_price = ce_profit_exit_price
                 ce_actual_exit_datetime = profit_datetime
                 ce_exit_type = ExitType.TAKE_PROFIT_EXIT
             else:
@@ -490,23 +492,25 @@ class HullMABackTesting(BaseBackTesting):
             # Check if SL exit mode is set in config file. If yes, check minute by minute data
             # to see if SL is getting hit
             if sl_check is not None:
-                pe_instrument_sl_hit, pe_exit_price, sl_datetime = self.instrument_stop_loss_hit(
+                pe_instrument_sl_hit, pe_sl_exit_price, sl_datetime = self.instrument_stop_loss_hit(
                     instrument=self.PE_ENTRY_INSTRUMENT,
                     stop_loss=sl_check["PE"],
                     exit_datetime=pe_actual_exit_datetime
                 )
             if take_profit_check is not None:
-                pe_instrument_profit_hit, pe_exit_price, profit_datetime = self.instrument_take_profit_hit(
+                pe_instrument_profit_hit, pe_profit_exit_price, profit_datetime = self.instrument_take_profit_hit(
                     instrument=self.PE_ENTRY_INSTRUMENT,
                     profit_percent=take_profit_check["PE"],
                     exit_datetime=pe_actual_exit_datetime
                 )
             if pe_instrument_sl_hit:
                 # This is True when SL check is ON and CE SL hits
+                pe_exit_price = pe_sl_exit_price
                 pe_actual_exit_datetime = sl_datetime
                 pe_exit_type = ExitType.SL_EXIT
             elif pe_instrument_profit_hit:
                 # This is True when take profit check in ON and PE profit hits
+                pe_exit_price = pe_profit_exit_price
                 pe_actual_exit_datetime = profit_datetime
                 pe_exit_type = ExitType.TAKE_PROFIT_EXIT
             else:

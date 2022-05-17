@@ -55,8 +55,8 @@ class BaseBackTesting:
             raise ConfigFileError("Missing input_excel_file_path attribute in config file")
         if "output_excel_file_path" not in self.config:
             raise ConfigFileError("Missing output_excel_file_path attribute in config file")
-        if "db_file_path" not in self.config:
-            raise ConfigFileError("Missing db_file_path attribute in config file")
+        # if "db_file_path" not in self.config:
+        #     raise ConfigFileError("Missing db_file_path attribute in config file")
         if self.config.get("ce_premium_check") is not None and \
                 "quantity_per_lot" not in self.config:
             raise ConfigFileError(
@@ -66,9 +66,9 @@ class BaseBackTesting:
             self.config["input_excel_file_path"] = self._input_excel_file_path
         if self._output_excel_file_path is not None:
             self.config["output_excel_file_path"] = self._output_excel_file_path
-        # If database file path is set in env var, use that path
-        if "db_file_path" in os.environ:
-            self.config["db_file_path"] = os.environ["db_file_path"]
+        # # If database file path is set in env var, use that path
+        # if "db_file_path" in os.environ:
+        #     self.config["db_file_path"] = os.environ["db_file_path"]
 
     @staticmethod
     def read_input_excel_to_df(filepath: Path) -> pd.DataFrame:
