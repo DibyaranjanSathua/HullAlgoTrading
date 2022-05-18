@@ -263,6 +263,49 @@ class FyersApi:
         assert response["s"] == FyersApi.OK, f"Error placing order for {symbol}"
         return response["id"]
 
+    def get_order_by_id(self, order_id: Optional[str] = None):
+        """
+        Fetches the order by order id placed by the user across all platforms and exchanges in
+        the current trading day.
+        """
+        logger.info(f"Getting order details from fyers API")
+        data = {"id": order_id} if order_id is not None else None
+        response = self._fyers.orderbook(data=data)
+        if response["s"] == FyersApi.ERROR:
+            logger.error(f"Error getting order details")
+            logger.info(response)
+        assert response["s"] == FyersApi.OK, f"Error getting order details"
+        logger.info(response)
+        return response
+
+    def get_positions(self):
+        """
+        Fetches the current open and closed positions for the current trading day.
+        Note that previous trading day’s closed positions will not be shown here.
+        """
+        logger.info(f"Getting positions from fyers API")
+        response = self._fyers.positions()
+        if response["s"] == FyersApi.ERROR:
+            logger.error(f"Error getting positions from fyers API")
+            logger.info(response)
+        assert response["s"] == FyersApi.OK, f"Error getting positions"
+        logger.info(response)
+        return response
+
+    def get_trades(self):
+        """
+        Fetches all the trades for the current day across all platforms and exchanges
+        in the current trading day.
+        """
+        logger.info(f"Getting all trades from fyers API")
+        response = self._fyers.tradebook()
+        if response["s"] == FyersApi.ERROR:
+            logger.error(f"Error getting trades from fyers API")
+            logger.info(response)
+        assert response["s"] == FyersApi.OK, f"Error getting trades"
+        logger.info(response)
+        return response
+
     @staticmethod
     def _get_state_string() -> str:
         """ Generate a random string of length 6 which will be used as state """
@@ -469,10 +512,11 @@ class FyersOrderData(threading.Thread):
     @staticmethod
     def add_order_data(data: List) -> None:
         logger.info(data)
-        data = data.pop()
-        data = data["d"]
-        order_id = data["id"]
-        FyersOrderData.__order_data[order_id] = OrderData.from_dict(data)
+        print(data)
+        # data = data.pop()
+        # data = data["d"]
+        # order_id = data["id"]
+        # FyersOrderData.__order_data[order_id] = OrderData.from_dict(data)
 
 
 class FyersSymbolParser:
@@ -563,6 +607,9 @@ if __name__ == "__main__":
     time.sleep(10)
     price = api.fyers_market_data.get_price("NSE:SBIN-EQ")
     print(f"SBI ltp: {price}")
+    api.get_order_by_id()
+    api.get_positions()
+    api.get_trades()
     # print(f"--> Unsubscribing NSE:SBIN-EQ")
     # api.fyers_market_data.unsubscribe(symbol=["NSE:SBIN-EQ"])
 
