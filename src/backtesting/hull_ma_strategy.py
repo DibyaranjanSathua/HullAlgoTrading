@@ -261,7 +261,8 @@ class HullMABackTesting(BaseBackTesting):
         )
         if instrument.option_type == "CE":
             # Its a long trade. So Stop Loss will be below the long price
-            instrument_sl_price = round((100 - stop_loss) * instrument.price / 100, 2)
+            instrument_sl_price = 0 if stop_loss == 100 \
+                else round((100 - stop_loss) * instrument.price / 100, 2)
         else:
             # Its a short trade. So Stop Loss will be above the short price
             instrument_sl_price = round((100 + stop_loss) * instrument.price / 100, 2)
@@ -293,7 +294,8 @@ class HullMABackTesting(BaseBackTesting):
             instrument_target_price = round((100 + profit_percent) * instrument.price / 100, 2)
         else:
             # Its a short trade. So target profit will be below the short price
-            instrument_target_price = round((100 + profit_percent) * instrument.price / 100, 2)
+            instrument_target_price = 0 if profit_percent == 100 \
+                else round((100 - profit_percent) * instrument.price / 100, 2)
         for data in price_data:
             # Long trade. If price goes above instrument_target_price, target profit hit
             if instrument.option_type == "CE" and data.close >= instrument_target_price:
