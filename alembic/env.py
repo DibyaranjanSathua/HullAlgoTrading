@@ -7,7 +7,7 @@ from sqlalchemy import pool
 from alembic import context
 from src.backtesting.historical_data.database import Base
 # Need to import all the models. Else alembic auto-migration will not work
-from src.backtesting.historical_data.models import StockIndex, OptionStrike, HistoricalPrice
+from src.backtesting.historical_data.models import *
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

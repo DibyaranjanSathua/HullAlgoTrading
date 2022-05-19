@@ -9,6 +9,7 @@
     "__comment": "Premium is per lot. So in code I am multiplying it by lot_size."
   },
   "close_position_day_end": true,
+  "use_pe_atm_strike": true,
   "SL_check": {
     "PE": 100,
     "CE": 50

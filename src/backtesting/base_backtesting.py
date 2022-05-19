@@ -196,3 +196,11 @@ class BaseBackTesting:
             )
             return data_exist is not None
         return False
+
+    def get_nifty_day_open(self, date: datetime.date) -> Optional[float]:
+        """ Get the open value for nifty for specific date """
+        nifty_data = DBApiPostgres.get_nifty_day_ohlc(self.session, date)
+        if nifty_data is None:
+            self._logger.warning(f"No nifty data found for {date}")
+            return None
+        return nifty_data.open

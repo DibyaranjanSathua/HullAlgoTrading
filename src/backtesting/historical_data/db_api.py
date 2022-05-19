@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.dialects import postgresql
 
 from src.backtesting.historical_data.models import Holiday, StockIndex, OptionStrike, \
-    HistoricalPrice
+    HistoricalPrice, NiftyDayData
 
 
 class DBApiPostgres:
@@ -105,13 +105,47 @@ class DBApiPostgres:
             return instance
 
     @staticmethod
+    def create_nifty_day_data(
+            session: Session,
+            date: datetime.date,
+            open: float,
+            high: float,
+            low: float,
+            close: float
+    ) -> NiftyDayData:
+        """ Add rows to nifty_day_data table """
+        instance = NiftyDayData(
+            date=date,
+            open=open,
+            high=high,
+            low=low,
+            close=close
+        )
+        session.add(instance)
+        session.commit()
+        session.refresh(instance)
+        return instance
+
+    @staticmethod
     def create_bulk_historical_price(session: Session, items: List[Dict[str, Any]]):
-        """ Create bulk insert. For row exist, it will do nothing  """
+        """ Run bulk insert. For row exist, it will do nothing  """
         session.execute(
             postgresql.insert(HistoricalPrice.__table__).values(items).on_conflict_do_nothing(
                 constraint="unique_strike_dt"
             )
         )
+
+    @staticmethod
+    def create_bulk_nifty_day_data(session: Session, items: List[Dict[str, Any]]):
+        """ Run bulk insert. For row exist, it will do nothing """
+        session.execute(
+            postgresql.insert(NiftyDayData.__table__).values(items).on_conflict_do_nothing()
+        )
+
+    @staticmethod
+    def get_nifty_day_ohlc(session: Session, date: datetime.date) -> NiftyDayData:
+        """ Return ohlc data for a specific date """
+        return session.query(NiftyDayData).filter(NiftyDayData.date == date).first()
 
     @staticmethod
     def fetch_historical_data(
@@ -249,17 +283,20 @@ class DBApiSqLite:
 if __name__ == "__main__":
     from src.backtesting.historical_data.database import SessionLocal
     with SessionLocal() as session:
-        data = DBApiPostgres.fetch_historical_data(
-            session=session,
-            index="NIFTY",
-            strike=9250,
-            option_type="CE",
-            expiry=datetime.date(day=27, month=10, year=2016)
-        )
-        print(type(data))       # <class 'sqlalchemy.orm.query.Query'>
-        print(type(data[0]))    # <class 'src.backtesting.historical_data.models.HistoricalPrice'>
-        for x in data:
-            print(x)
+        date = datetime.date(day=16, month=5, year=2022)
+        data = DBApiPostgres.get_nifty_day_ohlc(session, date)
+        print(data)
+        # data = DBApiPostgres.fetch_historical_data(
+        #     session=session,
+        #     index="NIFTY",
+        #     strike=9250,
+        #     option_type="CE",
+        #     expiry=datetime.date(day=27, month=10, year=2016)
+        # )
+        # print(type(data))       # <class 'sqlalchemy.orm.query.Query'>
+        # print(type(data[0]))    # <class 'src.backtesting.historical_data.models.HistoricalPrice'>
+        # for x in data:
+        #     print(x)
 
     # db_file = "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/" \
     #           "database.sqlite"

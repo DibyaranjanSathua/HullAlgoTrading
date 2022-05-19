@@ -69,3 +69,17 @@ class Holiday(Base):
 
     id = Column(BigInteger, primary_key=True)
     holiday_date = Column(Date, index=True, unique=True)
+
+
+class NiftyDayData(Base):
+    __tablename__ = "nifty_day_data"
+
+    id = Column(BigInteger, primary_key=True)
+    date = Column(Date, index=True, unique=True)
+    open = Column(Float(precision=2), nullable=True)
+    high = Column(Float(precision=2), nullable=True)
+    low = Column(Float(precision=2), nullable=True)
+    close = Column(Float(precision=2), nullable=True)
+
+    def __repr__(self):
+        return f"[{self.id}] {self.date} {self.open} {self.high} {self.low} {self.close}"

@@ -64,7 +64,10 @@ class HullMABackTesting(BaseBackTesting):
             f"Reading and processing input excel file {self.config['input_excel_file_path']}"
         )
         input_df = self.read_input_excel_to_df(Path(self.config["input_excel_file_path"]))
+        use_pe_atm_strike = False
         close_position_day_end = self.config.get("close_position_day_end", False)
+        if close_position_day_end:
+            use_pe_atm_strike = self.config.get("use_pe_atm_strike", False)
         for index, row in input_df.iterrows():
             # Signal type is entry and no entry has taken
             if row["Signal"] == SignalType.ENTRY and not self.is_entry_taken():
@@ -78,7 +81,8 @@ class HullMABackTesting(BaseBackTesting):
                 )
                 lot_size = int(row["Contracts"])
                 self.entry(
-                    entry_strike=self._entry_strike,
+                    ce_entry_strike=self._entry_strike,
+                    pe_entry_strike=self._entry_strike,
                     entry_datetime=self._entry_datetime,
                     lot_size=lot_size,
                     expiry=self._active_instrument_expiry
@@ -94,24 +98,35 @@ class HullMABackTesting(BaseBackTesting):
                 # again on next day
                 if close_position_day_end:
                     # Close the active position at day end and again take the position next day
-                    self.soft_entry_exit(exit_datetime=exit_datetime, lot_size=lot_size)
+                    self.soft_entry_exit(
+                        exit_datetime=exit_datetime,
+                        lot_size=lot_size,
+                        use_pe_atm_strike=use_pe_atm_strike
+                    )
                 else:
                     self.exit(exit_datetime=exit_datetime, lot_size=lot_size)
 
-    def fetch_historical_price(self, index: str, strike: int, expiry: datetime.date) -> None:
+    def fetch_historical_price(
+            self, index: str, ce_strike: int, pe_strike: int, expiry: datetime.date
+    ) -> None:
         """ Get the list of CE historical price data """
-        self._logger.info(f"Fetching historical data for {index} {strike} for expiry {expiry}")
+        self._logger.info(
+            f"Fetching historical data for {index} {ce_strike} CE for expiry {expiry}"
+        )
         self._ce_historical_data = DBApiPostgres.fetch_historical_data(
             session=self.session,   # Created in base class
             index=index,
-            strike=strike,
+            strike=ce_strike,
             option_type="CE",
             expiry=expiry
+        )
+        self._logger.info(
+            f"Fetching historical data for {index} {pe_strike} PE for expiry {expiry}"
         )
         self._pe_historical_data = DBApiPostgres.fetch_historical_data(
             session=self.session,   # Created in base class
             index=index,
-            strike=strike,
+            strike=pe_strike,
             option_type="PE",
             expiry=expiry
         )
@@ -307,11 +322,12 @@ class HullMABackTesting(BaseBackTesting):
 
     def entry(
             self,
-            entry_strike: int,
+            ce_entry_strike: int,
+            pe_entry_strike: int,
             entry_datetime: datetime.datetime,
             lot_size: int,
             expiry: datetime.date,
-            soft_entry: bool = False
+            soft_entry: bool = False,
     ) -> None:
         """
         Logic for trade entry. soft_entry is used when we close the position at dat end and open
@@ -320,7 +336,10 @@ class HullMABackTesting(BaseBackTesting):
 
         # Get historical data for both PE and CE for entry strike and expiry
         self.fetch_historical_price(
-            index=self.config["script"], strike=entry_strike, expiry=expiry
+            index=self.config["script"],
+            ce_strike=ce_entry_strike,
+            pe_strike=pe_entry_strike,
+            expiry=expiry
         )
         # Strategy analysis
         if self._pe_strategy_analysis.lot_size < lot_size:
@@ -334,7 +353,7 @@ class HullMABackTesting(BaseBackTesting):
         ce_entry_type = ""
         if not soft_entry or (soft_entry and self._trade_ce_next_day):
             self.CE_ENTRY_INSTRUMENT = self.get_ce_entry_instrument(
-                entry_strike=entry_strike,
+                entry_strike=ce_entry_strike,
                 entry_datetime=entry_datetime,
                 lot_size=lot_size,
                 expiry=expiry
@@ -356,7 +375,7 @@ class HullMABackTesting(BaseBackTesting):
         pe_entry_type = ""
         if not soft_entry or (soft_entry and self._trade_pe_next_day):
             self.PE_ENTRY_INSTRUMENT = self.get_pe_entry_instrument(
-                entry_strike=entry_strike,
+                entry_strike=pe_entry_strike,
                 entry_datetime=entry_datetime,
                 lot_size=lot_size,
                 expiry=expiry
@@ -372,7 +391,8 @@ class HullMABackTesting(BaseBackTesting):
         df_data = {
             "Trade": self._trade_count,
             "Script": self.config["script"],
-            "Strike": entry_strike,
+            "CEStrike": ce_entry_strike,
+            "PEStrike": pe_entry_strike,
             "Expiry": expiry,
             "LotSize": self.PE_ENTRY_INSTRUMENT.lot_size if self.PE_ENTRY_INSTRUMENT is not None
             else self.CE_ENTRY_INSTRUMENT.lot_size,
@@ -557,7 +577,10 @@ class HullMABackTesting(BaseBackTesting):
         df_data = {
             "Trade": self._trade_count,
             "Script": self.config["script"],
-            "Strike": active_instrument.strike,
+            "CEStrike": self.CE_ENTRY_INSTRUMENT.strike if self.CE_ENTRY_INSTRUMENT is not None
+            else None,
+            "PEStrike": self.PE_ENTRY_INSTRUMENT.strike if self.PE_ENTRY_INSTRUMENT is not None
+            else None,
             "Expiry": expiry,
             "LotSize": lot_size,
             "PEEntryExitTime": pe_actual_exit_datetime,
@@ -584,11 +607,15 @@ class HullMABackTesting(BaseBackTesting):
             if not pe_instrument_sl_hit:
                 self._trade_pe_next_day = True
 
-    def soft_entry_exit(self, exit_datetime: datetime.datetime, lot_size: int) -> None:
+    def soft_entry_exit(
+            self, exit_datetime: datetime.datetime, lot_size: int, use_pe_atm_strike: bool
+    ) -> None:
         """
         Logic for soft entry and exit. Used when we close position at day end and take the same
         position again next day.
         exit_datetime is the signal exit datetime
+        use_pe_atm_strike: Takes a new entry with atm strike if True else take entry with
+        the previous day strike
         """
         final_exit_date = min(exit_datetime.date(), self._active_instrument_expiry)
         exit_date = self._entry_datetime.date()
@@ -618,8 +645,14 @@ class HullMABackTesting(BaseBackTesting):
                 exit_date, datetime.time(hour=9, minute=15)
             )
             self._logger.info(f"Soft entry at {day_start_datetime}")
+            pe_entry_strike = self._entry_strike
+            if use_pe_atm_strike:
+                index = self.get_nifty_day_open(day_start_datetime.date())
+                pe_entry_strike = self._entry_strike if index is None \
+                    else self.get_nearest_50_strike(int(index))
             self.entry(
-                entry_strike=self._entry_strike,
+                ce_entry_strike=self._entry_strike,
+                pe_entry_strike=pe_entry_strike,
                 entry_datetime=day_start_datetime,
                 lot_size=lot_size,
                 expiry=self._active_instrument_expiry,
@@ -635,7 +668,7 @@ class HullMABackTesting(BaseBackTesting):
         self.process_input()
         self.save_df_to_excel(self._output_df, self.config["output_excel_file_path"])
         self._logger.info(f"Output excel is saved to {self.config['output_excel_file_path']}")
-        execution_time = time.time() - start_time
+        execution_time = round(time.time() - start_time, 2)
         self._logger.info(f"Execution time: {execution_time} seconds")
         # Print strategy analysis
         print("CE Buy Analysis")

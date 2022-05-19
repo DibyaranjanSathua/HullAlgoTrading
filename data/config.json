@@ -4,16 +4,14 @@
   "initial_capital_ce": 100000,
   "initial_capital_pe": 200000,
   "monthly_expiry": true,
-  "close_position_day_end": false,
+  "close_position_day_end": true,
   "SL_check": null,
   "ce_premium_check": {
     "premium": 10000,
     "__comment": "Premium is per lot. So in code I am multiplying it by lot_size."
   },
-  "take_profit_check": {
-    "PE": 20,
-    "CE": 20
-  },
+  "take_profit_check": null,
+  "use_pe_atm_strike": true,
   "missing_data": [
     {
       "strike": 17400,
@@ -35,6 +33,5 @@
     }
   ],
   "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/InputSignal.xlsx",
-  "output_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/output.xlsx",
-  "db_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/database.sqlite"
+  "output_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/output.xlsx"
 }

@@ -171,10 +171,36 @@ class CSV2DB:
             return valid_expiry
         return expiry
 
+    @staticmethod
+    def upload_nifty_day_data(csv_filepath: Path):
+        """ Upload nifty day data csv file to db """
+        items = []
+        with SessionLocal() as session:
+            with open(csv_filepath, mode="r", newline="") as csv_file:
+                reader = csv.DictReader(csv_file)
+                for row in reader:
+                    # Headers: "Date","Open","High","Low","Close"
+                    date = datetime.datetime.strptime(row["Date"], "%d %b %Y").date()
+                    row_dict = {
+                        "open": float(row["Open"]),
+                        "high": float(row["High"]),
+                        "low": float(row["Low"]),
+                        "close": float(row["Close"]),
+                        "date": date
+                    }
+                    print(f"Adding data for {date}")
+                    DBApiPostgres.create_nifty_day_data(session, **row_dict)
+                    # items.append(row_dict)
+            # DBApiPostgres.create_bulk_nifty_day_data(session=session, items=items)
+
 
 if __name__ == "__main__":
     # holiday_filepath = Path("/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading"
     #                         "/data/TradingHolidays.csv")
     # CSV2DB().add_holiday_to_db(holiday_filepath)
-    top_level_dir = Path("/Users/dibyaranjan/Downloads/NiftyHistoricalData")
-    CSV2DB().process_top_level_directory(top_level_dir)
+    # top_level_dir = Path("/Users/dibyaranjan/Downloads/NiftyHistoricalData")
+    # CSV2DB().process_top_level_directory(top_level_dir)
+    nifty50_data_filepath = Path(
+        "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/NIFTY 50_Data.csv"
+    )
+    CSV2DB.upload_nifty_day_data(nifty50_data_filepath)
