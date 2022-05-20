@@ -52,6 +52,9 @@ class HullMABackTesting(BaseBackTesting):
         # again next day. Used when close_position_day_end is set to true in config
         self._trade_ce_next_day: bool = False
         self._trade_pe_next_day: bool = False
+        # SL for the instrument
+        self._ce_sl: Optional[float] = None
+        self._pe_sl: Optional[float] = None
         # Strategy analysis
         self._pe_strategy_analysis: StrategyAnalysis = StrategyAnalysis()
         self._pe_strategy_analysis.consecutive_win_loss = ConsecutiveWinLoss()
@@ -87,6 +90,13 @@ class HullMABackTesting(BaseBackTesting):
                     lot_size=lot_size,
                     expiry=self._active_instrument_expiry
                 )
+                # This is an actual entry signal. We will calculate the SL for this instrument and
+                # use this same SL for everyday exit and next day entry instrument.
+                # SL will be calculated only once during the actual entry. The same SL will be used
+                # even if we are exiting the position everyday and taking a new position next day.
+                # check instrument_stop_loss_hit() function.
+                self._ce_sl = None
+                self._pe_sl = None
             elif row["Signal"] == SignalType.EXIT and self.is_entry_taken():
                 self._logger.info(
                     f"Exit signal triggered at {row['Date/Time']} for price {row['Price']}"
@@ -274,13 +284,25 @@ class HullMABackTesting(BaseBackTesting):
             end_datetime=exit_datetime,
             option_type=instrument.option_type
         )
+        # For everyday entry exit, we will not calculate the SL on everyday new entry.
+        # We will keep the same SL that we use for the actual entry signal
         if instrument.option_type == "CE":
-            # Its a long trade. So Stop Loss will be below the long price
-            instrument_sl_price = 0 if stop_loss == 100 \
-                else round((100 - stop_loss) * instrument.price / 100, 2)
+            if self._ce_sl is None:
+                # self.ce_sl is None means we are calculating the SL for the first time for this
+                # entry instrument
+                # Its a long trade. So Stop Loss will be below the long price
+                instrument_sl_price = 0 if stop_loss == 100 \
+                    else round((100 - stop_loss) * instrument.price / 100, 2)
+            else:
+                instrument_sl_price = self._ce_sl
         else:
-            # Its a short trade. So Stop Loss will be above the short price
-            instrument_sl_price = round((100 + stop_loss) * instrument.price / 100, 2)
+            if self._pe_sl is None:
+                # self.pe_sl is None means we are calculating the SL for the first time for this
+                # entry instrument
+                # Its a short trade. So Stop Loss will be above the short price
+                instrument_sl_price = round((100 + stop_loss) * instrument.price / 100, 2)
+            else:
+                instrument_sl_price = self._pe_sl
         for data in price_data:
             # Long trade. If price goes below instrument_sl_price, SL hit
             if instrument.option_type == "CE" and data.close < instrument_sl_price:
@@ -333,7 +355,6 @@ class HullMABackTesting(BaseBackTesting):
         Logic for trade entry. soft_entry is used when we close the position at dat end and open
         the same position again next day.
         """
-
         # Get historical data for both PE and CE for entry strike and expiry
         self.fetch_historical_price(
             index=self.config["script"],
@@ -382,6 +403,13 @@ class HullMABackTesting(BaseBackTesting):
             )
             pe_entry_type = EntryType.SOFT_ENTRY if soft_entry else EntryType.ENTRY_SIGNAL
             pe_instrument_price = self.PE_ENTRY_INSTRUMENT.price
+        # Check if there is any entry for either PE or CE. If no entry, return from this function.
+        # Normally when we program enters this function, then we are supposed to take an entry
+        # for either CE or PE. But consider a scenario when for a soft entry, PL SL was hit previous
+        # day and we comes to this function for CE entry. But CE entry is also skipped due to
+        # premium check. So we are not taking any trade at all.
+        if self.CE_ENTRY_INSTRUMENT is None and self.PE_ENTRY_INSTRUMENT is None:
+            return None
         self._trade_count += 1
         # Strategy Analysis
         if self.PE_ENTRY_INSTRUMENT:
@@ -463,11 +491,13 @@ class HullMABackTesting(BaseBackTesting):
                 )
             if ce_instrument_sl_hit:
                 # This is True when SL check is ON and CE SL hits
+                self._logger.info(f"SL hit for {self.CE_ENTRY_INSTRUMENT.symbol}")
                 ce_exit_price = ce_sl_exit_price
                 ce_actual_exit_datetime = sl_datetime
                 ce_exit_type = ExitType.SL_EXIT
             elif ce_instrument_profit_hit:
                 # This is True when take profit check in ON and CE profit hits
+                self._logger.info(f"Target profit hit for {self.CE_ENTRY_INSTRUMENT.symbol}")
                 ce_exit_price = ce_profit_exit_price
                 ce_actual_exit_datetime = profit_datetime
                 ce_exit_type = ExitType.TAKE_PROFIT_EXIT
@@ -527,11 +557,13 @@ class HullMABackTesting(BaseBackTesting):
                 )
             if pe_instrument_sl_hit:
                 # This is True when SL check is ON and CE SL hits
+                self._logger.info(f"SL hit for {self.PE_ENTRY_INSTRUMENT.symbol}")
                 pe_exit_price = pe_sl_exit_price
                 pe_actual_exit_datetime = sl_datetime
                 pe_exit_type = ExitType.SL_EXIT
             elif pe_instrument_profit_hit:
                 # This is True when take profit check in ON and PE profit hits
+                self._logger.info(f"Target profit hit for {self.PE_ENTRY_INSTRUMENT.symbol}")
                 pe_exit_price = pe_profit_exit_price
                 pe_actual_exit_datetime = profit_datetime
                 pe_exit_type = ExitType.TAKE_PROFIT_EXIT
@@ -602,10 +634,8 @@ class HullMABackTesting(BaseBackTesting):
             self.CE_ENTRY_INSTRUMENT = None
         # In soft exit mode, if SL not hit then take the same position next day
         if soft_exit:
-            if not ce_instrument_sl_hit:
-                self._trade_ce_next_day = True
-            if not pe_instrument_sl_hit:
-                self._trade_pe_next_day = True
+            self._trade_ce_next_day = not ce_instrument_sl_hit
+            self._trade_pe_next_day = not self._trade_pe_next_day
 
     def soft_entry_exit(
             self, exit_datetime: datetime.datetime, lot_size: int, use_pe_atm_strike: bool
@@ -658,6 +688,11 @@ class HullMABackTesting(BaseBackTesting):
                 expiry=self._active_instrument_expiry,
                 soft_entry=True
             )
+            # IF there is no entry (neither in CE not in PE), break
+            # Check a note for this condition in entry() function. Normally entry() function is
+            # called when we need to take an entry for either CE or PE (anyone of the instrument).
+            if self.CE_ENTRY_INSTRUMENT is None and self.PE_ENTRY_INSTRUMENT is None:
+                break
 
     def execute(self) -> None:
         """ Execute backtesting """
