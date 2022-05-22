@@ -68,9 +68,11 @@ class HullMABackTesting(BaseBackTesting):
         )
         input_df = self.read_input_excel_to_df(Path(self.config["input_excel_file_path"]))
         use_pe_atm_strike = False
+        use_ce_atm_strike = False
         close_position_day_end = self.config.get("close_position_day_end", False)
         if close_position_day_end:
             use_pe_atm_strike = self.config.get("use_pe_atm_strike", False)
+            use_ce_atm_strike = self.config.get("use_ce_atm_strike", False)
         for index, row in input_df.iterrows():
             # Signal type is entry and no entry has taken
             if row["Signal"] == SignalType.ENTRY and not self.is_entry_taken():
@@ -111,7 +113,8 @@ class HullMABackTesting(BaseBackTesting):
                     self.soft_entry_exit(
                         exit_datetime=exit_datetime,
                         lot_size=lot_size,
-                        use_pe_atm_strike=use_pe_atm_strike
+                        use_pe_atm_strike=use_pe_atm_strike,
+                        use_ce_atm_strike=use_ce_atm_strike,
                     )
                 else:
                     self.exit(exit_datetime=exit_datetime, lot_size=lot_size)
@@ -367,6 +370,8 @@ class HullMABackTesting(BaseBackTesting):
             self._pe_strategy_analysis.lot_size = lot_size
         if self._ce_strategy_analysis.lot_size < lot_size:
             self._ce_strategy_analysis.lot_size = lot_size
+        # Indicate if we close position at day end and take it again next day
+        close_position_day_end = self.config.get("close_position_day_end", False)
         # Take CE entry when soft_entry is False (actual signal entry) or when soft_entry is True
         # and self._trade_ce_next_day is True which means SL not hit on previous day
         # Soft entry is true when we close an entry on the day end and take the same entry next day
@@ -389,6 +394,11 @@ class HullMABackTesting(BaseBackTesting):
                 )
                 self.CE_ENTRY_INSTRUMENT = None
                 ce_entry_type = ""
+                if close_position_day_end:
+                    # If close_position_day_end is enabled and at the actual entry signal we don't
+                    # take an entry for CE due to premium check, we shouldn't take any entry
+                    # next day also. We will skip the whole entry exit signal.
+                    self._trade_ce_next_day = False
         # Take PE entry when soft_entry is False (actual signal entry) or when soft_entry is True
         # and self._trade_ce_next_day is True which means SL not hit on previous day
         # Soft entry is true when we close an entry on the day end and take the same entry next day
@@ -419,15 +429,15 @@ class HullMABackTesting(BaseBackTesting):
         df_data = {
             "Trade": self._trade_count,
             "Script": self.config["script"],
-            "CEStrike": ce_entry_strike,
-            "PEStrike": pe_entry_strike,
             "Expiry": expiry,
             "LotSize": self.PE_ENTRY_INSTRUMENT.lot_size if self.PE_ENTRY_INSTRUMENT is not None
             else self.CE_ENTRY_INSTRUMENT.lot_size,
+            "PEStrike": pe_entry_strike,
             "PEEntryExitTime": entry_datetime,
             "PESell": pe_instrument_price,
             "PEProfitLoss": 0,
             "PEEntryExitType": pe_entry_type,
+            "CEStrike": ce_entry_strike,
             "CEEntryExitTime": entry_datetime,
             "CEBuy": ce_instrument_price,
             "CEProfitLoss": 0,
@@ -609,16 +619,16 @@ class HullMABackTesting(BaseBackTesting):
         df_data = {
             "Trade": self._trade_count,
             "Script": self.config["script"],
-            "CEStrike": self.CE_ENTRY_INSTRUMENT.strike if self.CE_ENTRY_INSTRUMENT is not None
-            else None,
-            "PEStrike": self.PE_ENTRY_INSTRUMENT.strike if self.PE_ENTRY_INSTRUMENT is not None
-            else None,
             "Expiry": expiry,
             "LotSize": lot_size,
+            "PEStrike": self.PE_ENTRY_INSTRUMENT.strike if self.PE_ENTRY_INSTRUMENT is not None
+            else None,
             "PEEntryExitTime": pe_actual_exit_datetime,
             "PESell": pe_exit_price,
             "PEProfitLoss": pe_profit_loss,
             "PEEntryExitType": pe_exit_type,
+            "CEStrike": self.CE_ENTRY_INSTRUMENT.strike if self.CE_ENTRY_INSTRUMENT is not None
+            else None,
             "CEEntryExitTime": ce_actual_exit_datetime,
             "CEBuy": ce_exit_price,
             "CEProfitLoss": ce_profit_loss,
@@ -638,7 +648,11 @@ class HullMABackTesting(BaseBackTesting):
             self._trade_pe_next_day = not pe_instrument_sl_hit
 
     def soft_entry_exit(
-            self, exit_datetime: datetime.datetime, lot_size: int, use_pe_atm_strike: bool
+            self,
+            exit_datetime: datetime.datetime,
+            lot_size: int,
+            use_pe_atm_strike: bool,
+            use_ce_atm_strike: bool,
     ) -> None:
         """
         Logic for soft entry and exit. Used when we close position at day end and take the same
@@ -675,13 +689,21 @@ class HullMABackTesting(BaseBackTesting):
                 exit_date, datetime.time(hour=9, minute=15)
             )
             self._logger.info(f"Soft entry at {day_start_datetime}")
+            ce_entry_strike = self._entry_strike
             pe_entry_strike = self._entry_strike
-            if use_pe_atm_strike:
+            if use_ce_atm_strike or use_pe_atm_strike:
+                # Get the nifty atm strike for the next day
                 index = self.get_nifty_day_open(day_start_datetime.date())
+            if use_ce_atm_strike:
+                # If use_ce_atm_strike is True, take the ATM strike as ce_entry_strike for next day
+                ce_entry_strike = self._entry_strike if index is None \
+                    else self.get_nearest_50_strike(int(index))
+            if use_pe_atm_strike:
+                # If use_pe_atm_strike is True, take the ATM strike as pe_entry_strike for next day
                 pe_entry_strike = self._entry_strike if index is None \
                     else self.get_nearest_50_strike(int(index))
             self.entry(
-                ce_entry_strike=self._entry_strike,
+                ce_entry_strike=ce_entry_strike,
                 pe_entry_strike=pe_entry_strike,
                 entry_datetime=day_start_datetime,
                 lot_size=lot_size,

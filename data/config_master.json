@@ -10,6 +10,7 @@
   },
   "close_position_day_end": true,
   "use_pe_atm_strike": true,
+  "use_ce_atm_strike": true,
   "SL_check": {
     "PE": 100,
     "CE": 50
