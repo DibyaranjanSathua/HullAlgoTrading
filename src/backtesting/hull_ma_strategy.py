@@ -22,11 +22,6 @@ from src.utils.logger import LogFacade
 
 class HullMABackTesting(BaseBackTesting):
     """ Hull moving average backtesting """
-    OUTPUT_EXCEL_COLUMNS = [
-        "Trade", "Script", "Strike", "Expiry", "LotSize", "PEEntryExitTime", "PESell",
-        "PEProfitLoss", "PEEntryExitType", "CEEntryExitTime", "CEBuy", "CEProfitLoss",
-        "CEEntryExitType"
-    ]
 
     def __init__(
             self,
@@ -686,7 +681,7 @@ class HullMABackTesting(BaseBackTesting):
         exit_date = self._entry_datetime.date()
         while exit_date <= final_exit_date:
             day_exit_datetime = datetime.datetime.combine(
-                exit_date, datetime.time(hour=15, minute=29)
+                exit_date, datetime.time(hour=15, minute=25)
             )
             if exit_date == final_exit_date:
                 # This is the final day when we should square off the both CE and PE position
