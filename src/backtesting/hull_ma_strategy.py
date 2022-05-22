@@ -635,7 +635,7 @@ class HullMABackTesting(BaseBackTesting):
         # In soft exit mode, if SL not hit then take the same position next day
         if soft_exit:
             self._trade_ce_next_day = not ce_instrument_sl_hit
-            self._trade_pe_next_day = not self._trade_pe_next_day
+            self._trade_pe_next_day = not pe_instrument_sl_hit
 
     def soft_entry_exit(
             self, exit_datetime: datetime.datetime, lot_size: int, use_pe_atm_strike: bool
