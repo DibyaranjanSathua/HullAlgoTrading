@@ -12,6 +12,7 @@
   },
   "take_profit_check": null,
   "use_pe_atm_strike": true,
+  "use_ce_atm_strike": true,
   "missing_data": [
     {
       "strike": 17400,
@@ -32,6 +33,6 @@
       "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
     }
   ],
-  "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/InputSignal.xlsx",
-  "output_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/output.xlsx"
+  "input_excel_file_path": "/Users/dibyaranjan/Downloads/HULL_Test_Input.xlsx",
+  "output_excel_file_path": "/Users/dibyaranjan/Downloads/HULL_Test_Input_Output.xlsx"
 }

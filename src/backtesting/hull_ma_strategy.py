@@ -92,6 +92,9 @@ class HullMABackTesting(BaseBackTesting):
                     lot_size=lot_size,
                     expiry=self._active_instrument_expiry
                 )
+                if close_position_day_end:
+                    self._trade_pe_next_day = True
+                    self._trade_ce_next_day = True
                 # This is an actual entry signal. We will calculate the SL for this instrument and
                 # use this same SL for everyday exit and next day entry instrument.
                 # SL will be calculated only once during the actual entry. The same SL will be used
@@ -505,12 +508,20 @@ class HullMABackTesting(BaseBackTesting):
                 ce_exit_price = ce_sl_exit_price
                 ce_actual_exit_datetime = sl_datetime
                 ce_exit_type = ExitType.SL_EXIT
+                # SL hit for CE. We shouldn't soft enter again the next day
+                # when close_position_day_end is True
+                if soft_exit:
+                    self._trade_ce_next_day = False
             elif ce_instrument_profit_hit:
                 # This is True when take profit check in ON and CE profit hits
                 self._logger.info(f"Target profit hit for {self.CE_ENTRY_INSTRUMENT.symbol}")
                 ce_exit_price = ce_profit_exit_price
                 ce_actual_exit_datetime = profit_datetime
                 ce_exit_type = ExitType.TAKE_PROFIT_EXIT
+                # Take profit hit. We shouldn't soft enter again the next day
+                # when close_position_day_end is True
+                if soft_exit:
+                    self._trade_ce_next_day = False
             else:
                 # For this part the exit type is already calculated in top based on expiry date
                 try:
@@ -544,6 +555,9 @@ class HullMABackTesting(BaseBackTesting):
         else:
             if soft_exit:
                 ce_exit_type = ExitType.NO_TRADE
+                # For safe side, when CE instrument is None (no entry taken) and soft_exit is True
+                # make self._trade_ce_next_day to ensure no soft entry taken next day
+                self._trade_ce_next_day = False
             else:
                 ce_exit_type = ExitType.CE_PREMIUM_EXIT
 
@@ -571,12 +585,20 @@ class HullMABackTesting(BaseBackTesting):
                 pe_exit_price = pe_sl_exit_price
                 pe_actual_exit_datetime = sl_datetime
                 pe_exit_type = ExitType.SL_EXIT
+                # SL hit for PE. We shouldn't soft enter again the next day
+                # when close_position_day_end is True
+                if soft_exit:
+                    self._trade_pe_next_day = False
             elif pe_instrument_profit_hit:
                 # This is True when take profit check in ON and PE profit hits
                 self._logger.info(f"Target profit hit for {self.PE_ENTRY_INSTRUMENT.symbol}")
                 pe_exit_price = pe_profit_exit_price
                 pe_actual_exit_datetime = profit_datetime
                 pe_exit_type = ExitType.TAKE_PROFIT_EXIT
+                # Take profit hit for PE. We shouldn't soft enter again the next day
+                # when close_position_day_end is True
+                if soft_exit:
+                    self._trade_pe_next_day = False
             else:
                 try:
                     pe_exit_price = self.get_historical_price_by_datetime(
@@ -611,6 +633,9 @@ class HullMABackTesting(BaseBackTesting):
         else:
             if soft_exit:
                 pe_exit_type = ExitType.NO_TRADE
+                # For safe side, when PE instrument is None (no entry taken) and soft_exit is True
+                # make self._trade_pe_next_day to ensure no soft entry taken next day
+                self._trade_pe_next_day = False
             else:
                 # Code should never reach this condition. This is an invalid exit.
                 pe_exit_type = ExitType.INVALID_EXIT
@@ -642,10 +667,6 @@ class HullMABackTesting(BaseBackTesting):
             self.PE_ENTRY_INSTRUMENT = None
         if self.CE_ENTRY_INSTRUMENT is not None and self.CE_ENTRY_INSTRUMENT.lot_size == 0:
             self.CE_ENTRY_INSTRUMENT = None
-        # In soft exit mode, if SL not hit then take the same position next day
-        if soft_exit:
-            self._trade_ce_next_day = not ce_instrument_sl_hit
-            self._trade_pe_next_day = not pe_instrument_sl_hit
 
     def soft_entry_exit(
             self,
