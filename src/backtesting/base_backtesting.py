@@ -3,28 +3,51 @@ File:           base_backtesting.py
 Author:         Dibyaranjan Sathua
 Created on:     16/04/22, 12:17 pm
 """
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 import datetime
 import calendar
-import os
+import math
 
 import pandas as pd
 from sqlalchemy.orm import Session
 
-from src.backtesting.instrument import Instrument
+from src.backtesting.instrument import Instrument, CalendarInstrument
 from src.backtesting.config_reader import ConfigReader
 from src.backtesting.historical_data.db_api import DBApiPostgres
 from src.backtesting.historical_data.database import SessionLocal
 from src.backtesting.exception import ConfigFileError
+from src.backtesting.historical_data.models import Holiday
+from src.backtesting.historical_data.historical_data import HistoricalData
 from src.utils.logger import LogFacade
+
+
+class PairInstrument:
+    """ Contains different CE and PE instrument """
+
+    def __init__(self):
+        self.CE_ENTRY_INSTRUMENT: Optional[Instrument] = None
+        self.PE_ENTRY_INSTRUMENT: Optional[Instrument] = None
+
+    def is_entry_taken(self) -> bool:
+        """ Returns True if an entry has taken else returns False """
+        return self.CE_ENTRY_INSTRUMENT is not None or self.PE_ENTRY_INSTRUMENT is not None
+
+
+class Calendar:
+    """ Contains CE and PE calendar instrument """
+
+    def __init__(self):
+        self.PE_CALENDAR: Optional[CalendarInstrument] = None
+        self.CE_CALENDAR: Optional[CalendarInstrument] = None
+
+    def is_entry_taken(self) -> bool:
+        """ Returns True if an entry has taken else returns False """
+        return self.PE_CALENDAR is not None or self.CE_CALENDAR is not None
 
 
 class BaseBackTesting:
     """ Base class to hold common backtesting methods """
-    # Stores the entry trade
-    CE_ENTRY_INSTRUMENT: Optional[Instrument] = None
-    PE_ENTRY_INSTRUMENT: Optional[Instrument] = None
 
     def __init__(
             self,
@@ -36,20 +59,19 @@ class BaseBackTesting:
         self._input_excel_file_path = input_excel_file_path
         self._output_excel_file_path = output_excel_file_path
         self._logger: LogFacade = LogFacade("base_backtesting")
+        self._holidays: Optional[List[Holiday]] = None
         self.config: Optional[ConfigReader] = None
         self.session: Optional[Session] = None
+        self.historical_data: Optional[HistoricalData] = None
 
     def __del__(self):
         if self.session is not None:
             self.session.close()
 
-    def is_entry_taken(self) -> bool:
-        """ Returns True if an entry has taken else returns False """
-        return self.CE_ENTRY_INSTRUMENT is not None or self.PE_ENTRY_INSTRUMENT is not None
-
     def execute(self):
         """ execute back-testing """
         self.session = SessionLocal()
+        self.historical_data = HistoricalData(session=self.session)
         self.config = ConfigReader(self._config_file_path)
         if "input_excel_file_path" not in self.config:
             raise ConfigFileError("Missing input_excel_file_path attribute in config file")
@@ -66,9 +88,6 @@ class BaseBackTesting:
             self.config["input_excel_file_path"] = self._input_excel_file_path
         if self._output_excel_file_path is not None:
             self.config["output_excel_file_path"] = self._output_excel_file_path
-        # # If database file path is set in env var, use that path
-        # if "db_file_path" in os.environ:
-        #     self.config["db_file_path"] = os.environ["db_file_path"]
 
     @staticmethod
     def read_input_excel_to_df(filepath: Path) -> pd.DataFrame:
@@ -97,6 +116,15 @@ class BaseBackTesting:
         return expiry
 
     @staticmethod
+    def get_next_week_expiry(signal_date: datetime.date) -> datetime.date:
+        """ Return the next week expiry date """
+        # Monday is 0 and Sunday is 6. Thursday is 3
+        # Calculate current week expiry and add 7 days
+        offset = (3 - signal_date.weekday()) % 7
+        expiry = signal_date + datetime.timedelta(days=offset) + datetime.timedelta(days=7)
+        return expiry
+
+    @staticmethod
     def get_current_month_expiry(signal_date: datetime.date) -> datetime.date:
         """ Return current month last thursday date """
         year = signal_date.year
@@ -118,14 +146,14 @@ class BaseBackTesting:
 
     def get_expiry(self, signal_date: datetime.date) -> datetime.date:
         """ Return either weekly or monthly expiry depends on the setting in config file """
-        monthly_expiry = self.config.get("monthly_expiry")
+        monthly_expiry = self.config.get("monthly_expiry", False)
         expiry = self.get_current_month_expiry(signal_date) if monthly_expiry \
             else self.get_current_week_expiry(signal_date)
         return self.get_valid_expiry(expiry=expiry)
 
     def get_valid_expiry(self, expiry: datetime.date) -> datetime.date:
         """ Return a valid expiry which is not a weekend nor a holiday """
-        holiday = DBApiPostgres.is_holiday(self.session, expiry)
+        holiday = self.is_holiday(expiry)
         if holiday:
             valid_expiry = expiry
             while True:
@@ -138,14 +166,31 @@ class BaseBackTesting:
             return valid_expiry
         return expiry
 
+    def is_valid_trading_day(self, date: datetime.date) -> bool:
+        """ Check if the given date is between Monday to Friday and is not a holiday """
+        if date.weekday() in (5, 6) or self.is_holiday(date):
+            return False
+        return True
+
     @staticmethod
-    def get_nearest_50_strike(index: int) -> int:
+    def get_nearest_50_strike(index: float) -> int:
         """ Return the nearest 50 strike less than the index value """
         return int((index // 50) * 50)
 
+    @staticmethod
+    def get_nearest_100_strike(index: float, n: int = 0) -> int:
+        """ Add n to the index and return nearest 100 """
+        index += n
+        # For positive n, round down to nearest 100. For negative n, round up to nearest 100
+        # func = math.floor if n >= 0 else math.ceil
+        return round(index / 100) * 100
+
     def is_holiday(self,  dt: datetime.date) -> bool:
         """ Return True is the day is holiday """
-        return DBApiPostgres.is_holiday(self.session, dt=dt)
+        if self._holidays is None:
+            self._holidays = DBApiPostgres.get_holidays(self.session)
+        return next((x for x in self._holidays if x.holiday_date == dt), None) is not None
+        # return DBApiPostgres.is_holiday(self.session, dt=dt)
 
     def get_next_valid_date(self, current_exit_date: datetime.date) -> datetime.date:
         """ Return the next valid date which is not a weekend nor a holiday """
@@ -177,7 +222,7 @@ class BaseBackTesting:
         return signal_datetime
 
     @staticmethod
-    def get_entry_strike(index: int):
+    def get_entry_strike(index: float):
         """ Return the entry index """
         return BaseBackTesting.get_nearest_50_strike(index)
 
@@ -191,6 +236,24 @@ class BaseBackTesting:
                     x
                     for x in self.config["missing_data"]
                     if x["strike"] == strike and x["start_datetime"] <= dt <= x["end_datetime"]
+                ),
+                None
+            )
+            return data_exist is not None
+        return False
+
+    def is_nifty_data_missing(self, dt: datetime.datetime):
+        """
+        Check if the minute data for nifty is missing.
+        This needs to be configure in the config file manually.
+        Strike should be 1 for indicating missing nifty data.
+        """
+        if "missing_data" in self.config:
+            data_exist = next(
+                (
+                    x
+                    for x in self.config["missing_data"]
+                    if x["strike"] == 1 and x["start_datetime"] <= dt <= x["end_datetime"]
                 ),
                 None
             )

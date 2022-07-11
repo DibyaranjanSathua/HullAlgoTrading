@@ -13,7 +13,7 @@ from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 import diskcache
 
-from src.backtesting.hull_ma_strategy import HullMABackTesting
+from src.backtesting import HullMABackTesting, RuleEngine2, RuleEngine3
 from src.backtesting.strategy_analysis import StrategyAnalysis, ConsecutiveWinLoss
 
 
@@ -28,6 +28,13 @@ app = Dash(
     ],
     long_callback_manager=long_callback_manager
 )
+
+
+ENGINE_MAPPER = {
+    "rule_engine1": HullMABackTesting,
+    "rule_engine2": RuleEngine2,
+    "rule_engine3": RuleEngine3,
+}
 
 
 class AppLayout:
@@ -142,6 +149,15 @@ class AppLayout:
                     multiple=False
                 ),
                 dbc.Input(id="config_input", disabled=True, class_name="m-2"),
+                dbc.Select(
+                    id="rule_engine",
+                    options=[
+                        {"label": "Rule Engine1", "value": "rule_engine1"},
+                        {"label": "Rule Engine2", "value": "rule_engine2"},
+                        {"label": "Rule Engine3", "value": "rule_engine3"},
+                    ],
+                    value="rule_engine1",
+                ),
                 dbc.Button(
                     "Run BackTesting",
                     color="primary",
@@ -172,6 +188,7 @@ class AppLayout:
             State(component_id="input_excel_file_path", component_property="children"),
             State(component_id="output_excel_file_path", component_property="children"),
             State(component_id="input_config_file_path", component_property="children"),
+            State(component_id="rule_engine", component_property="value"),
         ],
         running=[
             (
@@ -191,7 +208,8 @@ class AppLayout:
             n_clicks,
             input_excel_file_path: str,
             output_excel_file_path: str,
-            config_file_path: str
+            config_file_path: str,
+            rule_engine: str
     ):
         """ Run back testing"""
         # Empty dataclass used to generate default table
@@ -201,15 +219,22 @@ class AppLayout:
             err = "Either input excel file or config file is missing"
             return AppLayout.get_strategy_analysis_table(strategy_analysis), \
                    AppLayout.get_strategy_analysis_table(strategy_analysis), str(err), True
-        strategy = HullMABackTesting(
+        engine = ENGINE_MAPPER.get(rule_engine)
+        strategy = engine(
             config_file_path=config_file_path,
             input_excel_file_path=input_excel_file_path,
             output_excel_file_path=output_excel_file_path
         )
         try:
             strategy.execute()
-            return AppLayout.get_strategy_analysis_table(strategy.ce_strategy_analysis), \
-                   AppLayout.get_strategy_analysis_table(strategy.pe_strategy_analysis), "", False
+            if engine is RuleEngine3:
+                ce_strategy_analysis = strategy.strategy_analysis
+                pe_strategy_analysis = strategy_analysis
+            else:
+                ce_strategy_analysis = strategy.ce_strategy_analysis
+                pe_strategy_analysis = strategy.pe_strategy_analysis
+            return AppLayout.get_strategy_analysis_table(ce_strategy_analysis), \
+                   AppLayout.get_strategy_analysis_table(pe_strategy_analysis), "", False
         except Exception as err:
             return AppLayout.get_strategy_analysis_table(strategy_analysis), \
                    AppLayout.get_strategy_analysis_table(strategy_analysis), str(err), True

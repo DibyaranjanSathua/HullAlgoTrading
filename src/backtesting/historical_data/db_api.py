@@ -9,11 +9,12 @@ from typing import Optional
 import sqlite3
 from pathlib import Path
 
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from sqlalchemy.dialects import postgresql
 
 from src.backtesting.historical_data.models import Holiday, StockIndex, OptionStrike, \
-    HistoricalPrice, NiftyDayData
+    HistoricalPrice, NiftyDayData, NiftyMinuteData
 
 
 class DBApiPostgres:
@@ -32,6 +33,11 @@ class DBApiPostgres:
     def is_holiday(session: Session, dt: datetime.date):
         """ Check if the provided date is a holiday """
         return session.query(Holiday).filter(Holiday.holiday_date == dt).first() is not None
+
+    @staticmethod
+    def get_holidays(session: Session) -> List[Holiday]:
+        """ Get the list of all available holidays in the database """
+        return session.query(Holiday).all()
 
     @staticmethod
     def create_stock_index(session: Session, index: str) -> StockIndex:
@@ -107,7 +113,7 @@ class DBApiPostgres:
     @staticmethod
     def create_nifty_day_data(
             session: Session,
-            date: datetime.date,
+            ticker_date: datetime.date,
             open: float,
             high: float,
             low: float,
@@ -115,7 +121,31 @@ class DBApiPostgres:
     ) -> NiftyDayData:
         """ Add rows to nifty_day_data table """
         instance = NiftyDayData(
-            date=date,
+            ticker_date=ticker_date,
+            open=open,
+            high=high,
+            low=low,
+            close=close
+        )
+        session.add(instance)
+        session.commit()
+        session.refresh(instance)
+        return instance
+
+    @staticmethod
+    def create_nifty_minute_data(
+            session: Session,
+            ticker_date: datetime.date,
+            ticker_time: datetime.time,
+            open: float,
+            high: float,
+            low: float,
+            close: float
+    ) -> NiftyMinuteData:
+        """ Add rows to nifty_day_data table """
+        instance = NiftyMinuteData(
+            ticker_date=ticker_date,
+            ticker_time=ticker_time,
             open=open,
             high=high,
             low=low,
@@ -134,6 +164,7 @@ class DBApiPostgres:
                 constraint="unique_strike_dt"
             )
         )
+        session.commit()
 
     @staticmethod
     def create_bulk_nifty_day_data(session: Session, items: List[Dict[str, Any]]):
@@ -141,11 +172,29 @@ class DBApiPostgres:
         session.execute(
             postgresql.insert(NiftyDayData.__table__).values(items).on_conflict_do_nothing()
         )
+        session.commit()
+
+    @staticmethod
+    def create_bulk_nifty_minute_data(session: Session, items: List[Dict[str, Any]]):
+        """ Run bulk insert. For row exist, it will do nothing """
+        session.execute(
+            postgresql.insert(NiftyMinuteData.__table__).values(items).on_conflict_do_nothing(
+                constraint="unique_date_time_nifty_minute_data"
+            )
+        )
+        session.commit()
 
     @staticmethod
     def get_nifty_day_ohlc(session: Session, date: datetime.date) -> NiftyDayData:
         """ Return ohlc data for a specific date """
         return session.query(NiftyDayData).filter(NiftyDayData.date == date).first()
+
+    @staticmethod
+    def get_nifty_minute_data(session: Session, date: datetime.date) -> List[NiftyMinuteData]:
+        """ Return ohlc data for a specific date """
+        return session.query(NiftyMinuteData).filter(
+            NiftyMinuteData.ticker_date == date
+        ).order_by(NiftyMinuteData.ticker_time)
 
     @staticmethod
     def fetch_historical_data(
@@ -156,6 +205,26 @@ class DBApiPostgres:
             OptionStrike.strike == strike,
             OptionStrike.option_type == option_type,
             OptionStrike.expiry == expiry
+        ).order_by(HistoricalPrice.ticker_datetime)
+        # Due to lazy loading, database base operation will not be performed until we request for it
+        return list(result)
+
+    @staticmethod
+    def fetch_historical_data_by_date(
+            session: Session,
+            index: str,
+            option_type: str,
+            start_date: datetime.date,
+            end_date: datetime.date
+    ) -> List[HistoricalPrice]:
+        """ Fetch all historical price data for specific option type for a period of expiry """
+        result = session.query(HistoricalPrice).join(OptionStrike).join(StockIndex).filter(
+            StockIndex.name == index,
+            OptionStrike.option_type == option_type,
+            and_(
+                OptionStrike.expiry >= start_date,
+                OptionStrike.expiry <= end_date
+            )
         ).order_by(HistoricalPrice.ticker_datetime)
         # Due to lazy loading, database base operation will not be performed until we request for it
         return list(result)
@@ -283,9 +352,26 @@ class DBApiSqLite:
 if __name__ == "__main__":
     from src.backtesting.historical_data.database import SessionLocal
     with SessionLocal() as session:
-        date = datetime.date(day=16, month=5, year=2022)
-        data = DBApiPostgres.get_nifty_day_ohlc(session, date)
-        print(data)
+        # date = datetime.date(day=21, month=10, year=2019)
+        # DBApiPostgres.create_holiday(session, date)
+        # result = DBApiPostgres.get_holidays(session)
+        # z = next((x for x in result if x.holiday_date == date), None)
+        # if z is None:
+        #     print("Not a holiday")
+        # else:
+        #     print("Holiday")
+        d1 = datetime.date(day=1, month=7, year=2019)
+        d2 = datetime.date(day=30, month=7, year=2019)
+        result = session.query(HistoricalPrice).join(OptionStrike).join(StockIndex).filter(
+            StockIndex.name == "NIFTY",
+            OptionStrike.option_type == "CE",
+            and_(OptionStrike.expiry > d1, OptionStrike.expiry < d2)
+        ).order_by(HistoricalPrice.ticker_datetime)
+    breakpoint()
+    # with SessionLocal() as session:
+    #     date = datetime.date(day=16, month=5, year=2022)
+    #     data = DBApiPostgres.get_nifty_day_ohlc(session, date)
+    #     print(data)
         # data = DBApiPostgres.fetch_historical_data(
         #     session=session,
         #     index="NIFTY",

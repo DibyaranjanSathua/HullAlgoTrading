@@ -57,6 +57,8 @@ class ConfigReader:
                 output_dict[key] = datetime.datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
             elif key.endswith("date"):
                 output_dict[key] = datetime.datetime.strptime(value, "%Y-%m-%d").date()
+            elif key.endswith("time"):
+                output_dict[key] = datetime.datetime.strptime(value, "%H:%M").time()
             else:
                 output_dict[key] = value
         return output_dict

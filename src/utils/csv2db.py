@@ -32,7 +32,6 @@ class CSV2DB:
 
     def __init__(self):
         self._filename_regex = re.compile(r"([A-Za-z]+)(\d+)([A-Za-z]+)(\d+)([A-Za-z]+)")
-        pass
 
     def process_top_level_directory(self, directory_path: Path):
         """ Process the top level directory containing each year as subdirectory """
@@ -186,12 +185,49 @@ class CSV2DB:
                         "high": float(row["High"]),
                         "low": float(row["Low"]),
                         "close": float(row["Close"]),
-                        "date": date
+                        "ticker_date": date
                     }
                     print(f"Adding data for {date}")
                     DBApiPostgres.create_nifty_day_data(session, **row_dict)
                     # items.append(row_dict)
             # DBApiPostgres.create_bulk_nifty_day_data(session=session, items=items)
+
+    @staticmethod
+    def upload_nifty_minute_data(csv_filepath: Path, bulk_update: bool = True):
+        """ Upload nifty day data csv file to db """
+        # Fieldnames or headers are missing from the csv file
+        fieldnames = ["Script", "Date", "Time", "Open", "High", "Low", "Close", "Extra1", "Extra2"]
+        items = []
+        with SessionLocal() as session:
+            with open(csv_filepath, mode="r", newline="") as csv_file:
+                reader = csv.DictReader(csv_file, fieldnames=fieldnames)
+                for row in reader:
+                    date = datetime.datetime.strptime(row["Date"], "%Y%m%d").date()
+                    time = datetime.datetime.strptime(row["Time"], "%H:%M").time()
+                    row_dict = {
+                        "open": float(row["Open"]),
+                        "high": float(row["High"]),
+                        "low": float(row["Low"]),
+                        "close": float(row["Close"]),
+                        "ticker_date": date,
+                        "ticker_time": time
+                    }
+                    print(f"Adding data for {date} {time}")
+                    if bulk_update:
+                        items.append(row_dict)
+                    else:
+                        DBApiPostgres.create_nifty_minute_data(session, **row_dict)
+            if bulk_update:
+                DBApiPostgres.create_bulk_nifty_minute_data(session=session, items=items)
+
+    def process_top_level_nifty_directory(self, directory_path: Path):
+        """ Process the top level directory containing each year as subdirectory """
+        for dir_path in directory_path.iterdir():
+            if dir_path.is_dir():
+                print(f"Processing {dir_path}")
+                for file_path in dir_path.iterdir():
+                    if file_path.is_file() and file_path.suffix in [".csv", ".txt"]:
+                        self.upload_nifty_minute_data(file_path, bulk_update=True)
 
 
 if __name__ == "__main__":
@@ -200,7 +236,14 @@ if __name__ == "__main__":
     # CSV2DB().add_holiday_to_db(holiday_filepath)
     # top_level_dir = Path("/Users/dibyaranjan/Downloads/NiftyHistoricalData")
     # CSV2DB().process_top_level_directory(top_level_dir)
-    nifty50_data_filepath = Path(
-        "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/NIFTY 50_Data.csv"
-    )
-    CSV2DB.upload_nifty_day_data(nifty50_data_filepath)
+    # nifty50_data_filepath = Path(
+    #     "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/NIFTY 50_Data.csv"
+    # )
+    # CSV2DB.upload_nifty_day_data(nifty50_data_filepath)
+    # nifty50_minute_data_filepath = Path(
+    #     "/Users/dibyaranjan/Downloads/Intraday 1 Min Data/2019/2019 APRIL NIFTY.txt"
+    # )
+    # CSV2DB.upload_nifty_minute_data(nifty50_minute_data_filepath, bulk_update=True)
+
+    nifty_min_data_directory = Path("/Users/dibyaranjan/Downloads/Intraday 1 Min Data")
+    CSV2DB().process_top_level_nifty_directory(nifty_min_data_directory)

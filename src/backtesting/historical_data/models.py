@@ -4,7 +4,7 @@ Author:         Dibyaranjan Sathua
 Created on:     25/04/22, 6:50 pm
 """
 from sqlalchemy import String, BigInteger, ForeignKey, Column, Date, DateTime, Integer, Float, \
-    UniqueConstraint
+    UniqueConstraint, Time
 from sqlalchemy.orm import relationship
 
 from src.backtesting.historical_data.database import Base
@@ -75,11 +75,31 @@ class NiftyDayData(Base):
     __tablename__ = "nifty_day_data"
 
     id = Column(BigInteger, primary_key=True)
-    date = Column(Date, index=True, unique=True)
+    ticker_date = Column(Date, index=True, unique=True)
     open = Column(Float(precision=2), nullable=True)
     high = Column(Float(precision=2), nullable=True)
     low = Column(Float(precision=2), nullable=True)
     close = Column(Float(precision=2), nullable=True)
 
     def __repr__(self):
-        return f"[{self.id}] {self.date} {self.open} {self.high} {self.low} {self.close}"
+        return f"[{self.id}] {self.ticker_date} {self.open} {self.high} {self.low} {self.close}"
+
+
+class NiftyMinuteData(Base):
+    __tablename__ = "nifty_minute_data"
+
+    id = Column(BigInteger, primary_key=True)
+    ticker_date = Column(Date, index=True)
+    ticker_time = Column(Time, index=True)
+    open = Column(Float(precision=2), nullable=True)
+    high = Column(Float(precision=2), nullable=True)
+    low = Column(Float(precision=2), nullable=True)
+    close = Column(Float(precision=2), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("ticker_date", "ticker_time", name="unique_date_time_nifty_minute_data"),
+    )
+
+    def __repr__(self):
+        return f"[{self.id}] {self.date} {self.time} {self.open} {self.high} {self.low} " \
+               f"{self.close}"

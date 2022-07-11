@@ -1,0 +1,104 @@
+{
+  "script": "NIFTY",
+  "quantity_per_lot": 50,
+  "backtesting_start_date": "2019-04-01",
+  "backtesting_end_date": "2022-03-31",
+  "entry_time": "10:00",
+  "exit_time": "15:15",
+  "initial_capital_ce": 100000,
+  "initial_capital_pe": 200000,
+  "pe_strike": -100,
+  "ce_strike": 100,
+  "lot_size": 1,
+  "SL_check": {
+    "PE": 50,
+    "CE": 50
+  },
+  "take_profit_check": {
+    "PE": 20,
+    "CE": 20
+  },
+  "monthly_expiry": false,
+  "missing_data": [
+    {
+      "strike": 17400,
+      "start_datetime": "2022-02-03 09:15:00",
+      "end_datetime": "2022-02-03 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 17800,
+      "start_datetime": "2022-01-12 09:15:00",
+      "end_datetime": "2022-01-12 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 11300,
+      "start_datetime": "2019-07-30 09:15:00",
+      "end_datetime": "2019-07-30 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 11950,
+      "start_datetime": "2019-11-06 09:15:00",
+      "end_datetime": "2019-11-06 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 11750,
+      "start_datetime": "2019-11-06 09:15:00",
+      "end_datetime": "2019-11-06 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 8550,
+      "start_datetime": "2020-03-13 09:15:00",
+      "end_datetime": "2020-03-13 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 14600,
+      "start_datetime": "2021-01-15 09:15:00",
+      "end_datetime": "2021-01-15 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 18250,
+      "start_datetime": "2022-01-12 09:15:00",
+      "end_datetime": "2022-01-12 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 18050,
+      "start_datetime": "2022-01-12 09:15:00",
+      "end_datetime": "2022-01-12 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 17800,
+      "start_datetime": "2022-02-03 09:15:00",
+      "end_datetime": "2022-02-03 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 17600,
+      "start_datetime": "2022-02-03 09:15:00",
+      "end_datetime": "2022-02-03 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 17450,
+      "start_datetime": "2022-03-23 09:15:00",
+      "end_datetime": "2022-03-23 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    },
+    {
+      "strike": 17250,
+      "start_datetime": "2022-03-23 09:15:00",
+      "end_datetime": "2022-03-23 15:29:00",
+      "__comment": "For datetime field key should ends with datetime. Format is YYYY-MM-DD HH:MM:SS"
+    }
+  ],
+  "input_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/input.xlsx",
+  "output_excel_file_path": "/Users/dibyaranjan/Upwork/client_arun_algotrading/HullAlgoTrading/data/output.xlsx"
+}

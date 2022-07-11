@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 import sqlite3
 
-from src.backtesting.base_backtesting import BaseBackTesting
+from src.backtesting.base_backtesting import BaseBackTesting, PairInstrument
 from src.backtesting.constant import SignalType, ExitType, EntryType
 from src.backtesting.instrument import Instrument
 from src.backtesting.historical_data.db_api import DBApiPostgres
@@ -20,7 +20,7 @@ from src.backtesting.strategy_analysis import StrategyAnalysis, ConsecutiveWinLo
 from src.utils.logger import LogFacade
 
 
-class HullMABackTesting(BaseBackTesting):
+class HullMABackTesting(BaseBackTesting, PairInstrument):
     """ Hull moving average backtesting """
 
     def __init__(
@@ -34,6 +34,7 @@ class HullMABackTesting(BaseBackTesting):
             input_excel_file_path=input_excel_file_path,
             output_excel_file_path=output_excel_file_path
         )
+        PairInstrument.__init__(self)
         self._ce_historical_data: List[HistoricalPrice] = []
         self._pe_historical_data: List[HistoricalPrice] = []
         self._logger: LogFacade = LogFacade("hull_ma_backtesting")

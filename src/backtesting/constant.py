@@ -8,6 +8,10 @@ Created on:     16/04/22, 1:19 pm
 class SignalType:
     ENTRY: str = "ET"
     EXIT: str = "EX"
+    ENTRY_LONG: str = "ETL"     # For calendar spread. PE calendar
+    EXIT_LONG: str = "EXL"      # For calendar spread. PE calendar
+    ENTRY_SHORT: str = "ETS"    # For calendar spread. CE calendar
+    EXIT_SHORT: str = "EXS"    # For calendar spread. CE calendar
 
 
 class ExitType:
