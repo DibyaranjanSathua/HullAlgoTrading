@@ -72,6 +72,14 @@ class RuleEngine3(BaseBackTesting, Calendar):
         input_df = self.read_input_excel_to_df(Path(self.config["input_excel_file_path"]))
         for index, row in input_df.iterrows():
             # Signal type is entry and no entry has taken
+            valid_signals = (
+                SignalType.ENTRY_LONG, SignalType.ENTRY_SHORT, SignalType.EXIT_LONG,
+                SignalType.EXIT_SHORT
+            )
+            if row["Signal"] not in valid_signals:
+                raise BackTestingError(
+                    f'Invalid signal {row["Signal"]}. Valid signals are {valid_signals}'
+                )
             if row["Signal"] in (SignalType.ENTRY_LONG, SignalType.ENTRY_SHORT) \
                     and not self.is_entry_taken():
                 self._logger.info(

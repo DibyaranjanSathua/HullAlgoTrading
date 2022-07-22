@@ -84,8 +84,11 @@ class CSV2DB:
             for row in reader:
                 # Headers: Ticker,Date,Time,Open,High,Low,Close,Volume,OI
                 # print(row["Ticker"], row["Date"], row["Time"], float(row["Close"]))
-                ticker_date = datetime.datetime.strptime(row["Date"], "%Y%m%d").date()
-                ticker_time = datetime.datetime.strptime(row["Time"], "%H:%M:%S").time()
+                try:
+                    ticker_date = datetime.datetime.strptime(row["Date"], "%Y%m%d").date()
+                    ticker_time = datetime.datetime.strptime(row["Time"], "%H:%M:%S").time()
+                except (ValueError, KeyError):
+                    continue
                 ticket_datetime = datetime.datetime.combine(ticker_date, ticker_time)
                 row_dict = {
                     "open": float(row["Open"]),
@@ -119,7 +122,7 @@ class CSV2DB:
             # day is specified.
             if strike % 50 == 0:
                 # Get monthly expiry
-                expiry = self.get_monthly_expiry(session=session,year=year, month=month)
+                expiry = self.get_monthly_expiry(session=session, year=year, month=month)
             else:
                 strike: int = int(match_obj.group(2)[:-2])
                 day: int = int(match_obj.group(2)[-2:])
